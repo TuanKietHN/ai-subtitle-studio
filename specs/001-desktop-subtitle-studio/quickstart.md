@@ -187,7 +187,7 @@ Expected:
 ```powershell
 .\scripts\package-runtime.ps1 -Version 0.1.0-rc.1
 .\scripts\generate-release-manifest.ps1 -Version 0.1.0-rc.1
-.\scripts\verify-release.ps1 -Version 0.1.0-rc.1 -Local
+.\scripts\verify-release.ps1 -Version 0.1.0-rc.1
 ```
 
 Expected:
@@ -274,31 +274,37 @@ Expected:
 - API keys are absent from logs.
 - Queue and completed results survive restart.
 
-## GitHub Draft Release Verification
+## GitHub Release Verification Without GitHub CLI
 
-Before publishing:
+Create a draft Release in the GitHub web interface and upload every file from
+`release/`. Download all assets again with the browser into a separate
+directory, then run:
 
 ```powershell
-.\scripts\verify-release.ps1 -Version 0.1.0-rc.1 -GitHubDraft
+.\scripts\verify-release.ps1 `
+  -Version 0.1.0-rc.1 `
+  -ReleaseDirectory "C:\Temp\ai-subtitle-studio-v0.1.0-rc.1"
 ```
 
 Expected:
 
-- Draft release tag targets the expected commit.
+- The downloaded manifest records the expected tag and commit.
 - All required assets exist and are below GitHub limits.
 - Downloaded asset hashes match both manifest and `SHA256SUMS`.
 - Installer/application signatures validate for a stable release.
 - SBOM/notices are present.
 - README latest-download link resolves to the intended installer naming policy.
 
-Publish as pre-release if signing or any stable gate is missing. Never replace an asset for an already published tag; create a new version/tag.
+Publish through the GitHub web interface as a pre-release if signing or any
+stable gate is missing. Never replace an asset for an already published tag;
+create a new version/tag.
 
 ## Implementation Validation Notes
 
 Last source validation run: 2026-07-30.
 
 - Python: 3.13.7 local development environment.
-- Final automated RC result: `131 passed` under pytest 9.0.3; `compileall`,
+- Final automated result: `132 passed` under pytest 9.0.3; `compileall`,
   `pip check`, repository hygiene and PowerShell syntax validation also passed.
 - Installed versions observed: WhisperX 3.8.6, Torch 2.8.0+cu128, TorchVision 0.23.0+cu128, TorchAudio 2.8.0+cu128, PyInstaller 6.21.0 and PySide6 6.11.1.
 - PyPI re-check: WhisperX 3.8.6 remains the latest stable; 3.8.7rc1 remains a pre-release.
@@ -329,9 +335,9 @@ Last source validation run: 2026-07-30.
 - GitHub Actions are pinned to full commit SHAs. Workflow contract tests passed
   for hosted Python 3.11/3.13 CI, read-only security jobs and the protected
   self-hosted Windows release environment.
-- GitHub CLI 2.96.0 is installed locally, but no GitHub account is authenticated
-  yet. Candidate URLs still use provisional owner `Kiet`; regenerate the
-  manifest with the authenticated owner and source commit before upload.
+- Candidate URLs currently use provisional owner `Kiet`; regenerate the
+  installer and manifest with the final GitHub owner/repository and source
+  commit before upload.
 - NVIDIA acceptance ran on an RTX 5060 8 GiB (driver 610.88) with two
   synthetic English MP4 files and the `medium` model. The isolated model cache
   downloaded 9 files / 1,530,571,775 bytes; WhisperX logged mandatory Pyannote

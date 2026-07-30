@@ -215,6 +215,8 @@ Kế hoạch, artifact contract và checklist phát hành nằm tại:
 - `specs/001-desktop-subtitle-studio/plan.md`
 - `specs/001-desktop-subtitle-studio/contracts/release-artifacts.md`
 - `specs/001-desktop-subtitle-studio/quickstart.md`
+- `docs/RELEASE_EXE.md` — hướng dẫn build EXE, tự push bằng Git và tạo Release
+  trên giao diện GitHub, không dùng GitHub CLI.
 
 Luồng mục tiêu là PyInstaller `onedir` + Inno Setup online installer. Runtime
 CUDA được chia thành các release asset nhỏ hơn 1.9 GiB; installer tải qua HTTPS,
@@ -230,7 +232,7 @@ python -m compileall src tests
 python -m pytest tests/unit tests/contract tests/integration tests/gui
 ```
 
-Kết quả RC hiện tại: `131 passed`; `compileall`, `pip check`, kiểm tra repository,
+Kết quả hiện tại: `132 passed`; `compileall`, `pip check`, kiểm tra repository,
 PowerShell syntax, frozen smoke và local release verification đều đạt. Bằng
 chứng chi tiết và các cổng external còn mở nằm trong
 `specs/001-desktop-subtitle-studio/quickstart.md`.

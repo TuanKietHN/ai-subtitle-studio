@@ -318,7 +318,7 @@
 - [X] T137 Implement the release manifest JSON Schema in `packaging/release-manifest.schema.json`
 - [X] T138 Implement versioned manifest, SHA256SUMS and build identity generation in `scripts/generate-release-manifest.ps1`
 - [X] T139 Implement multi-volume runtime packaging with a strict 1.9 GiB gate in `scripts/package-runtime.ps1`
-- [X] T140 Implement local/draft asset, checksum, size and signature verification in `scripts/verify-release.ps1`
+- [X] T140 Implement local/downloaded asset, checksum, size and signature verification in `scripts/verify-release.ps1`
 - [X] T141 Implement per-user online installer downloads, SHA-256 checks, extraction, upgrade and uninstall preservation in `packaging/installer/ai-subtitle-studio.iss`
 - [X] T142 Implement generated Inno Setup release values in `packaging/installer/generated-release-values.iss`
 - [X] T143 Implement Authenticode sign/verify helpers without embedded secrets in `scripts/sign-release.ps1`
@@ -338,12 +338,13 @@
 - [X] T148 [P] Configure dependency updates in `.github/dependabot.yml`
 - [X] T149 [P] Configure generated release notes in `.github/release.yml`
 - [X] T150 [P] Configure source secret/dependency review in `.github/workflows/security.yml`
-- [X] T151 Implement protected self-hosted Windows tag/manual release workflow in `.github/workflows/release-windows.yml`
+- [X] T151 Implement protected self-hosted Windows tag/manual release-bundle workflow in `.github/workflows/release-windows.yml`
 - [X] T152 Add SBOM/provenance generation and upload steps in `.github/workflows/release-windows.yml` and `scripts/build-release.ps1`
-- [X] T153 Add GitHub repository setup/branch protection instructions in `docs/GITHUB_SETUP.md`
+- [X] T153 Add GitHub repository setup, branch protection and manual EXE release instructions in `docs/GITHUB_SETUP.md` and `docs/RELEASE_EXE.md`
 - [X] T154 Validate workflow syntax, permissions, immutable naming and untrusted-runner separation in `tests/contract/test_github_workflows.py`
 
-**Checkpoint**: Hosted CI is safe/green and protected release workflow creates a verifiable draft release from a tag.
+**Checkpoint**: Hosted CI is safe/green and the protected release workflow
+creates a verifiable artifact bundle from a tag for manual web publication.
 
 ---
 

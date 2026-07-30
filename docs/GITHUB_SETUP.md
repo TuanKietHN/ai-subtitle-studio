@@ -1,13 +1,16 @@
-# GitHub Repository and Release Setup
+# GitHub Repository Setup Without GitHub CLI
 
-## 1. Create the repository
+Quy trình này dùng giao diện web GitHub và lệnh `git`, không yêu cầu GitHub CLI.
+Hướng dẫn build/upload EXE đầy đủ nằm tại
+[`docs/RELEASE_EXE.md`](./RELEASE_EXE.md).
 
-Create `ai-subtitle-studio` as a private repository first. Do not initialize it
-with a README, license or `.gitignore`; those files already exist locally.
-Confirm the final GitHub owner before regenerating release artifacts because
-the owner is embedded in every immutable runtime download URL.
+## 1. Tạo repository
 
-Add the remote only after verifying the destination:
+Tạo `ai-subtitle-studio` trên `https://github.com/new` dưới dạng private repository.
+Không khởi tạo README, license hoặc `.gitignore` vì các file đó đã có trong
+source.
+
+Thêm remote và push:
 
 ```powershell
 git remote add origin https://github.com/<owner>/ai-subtitle-studio.git
@@ -15,31 +18,45 @@ git remote -v
 git push -u origin main
 ```
 
-Keep the repository private until source history, license policy, dependency
-notices and the first draft release have been reviewed. Changing visibility is
-a deliberate owner decision, not part of an automated workflow.
+Giữ repository private cho đến khi chủ sở hữu chọn source license, kiểm tra
+history và quyết định rõ việc công khai source. Third-party notices đã có nhưng
+không tự động thay thế quyết định license của chủ sở hữu.
 
-## 2. Protect `main`
+## 2. Bảo vệ `main`
 
-Create a branch ruleset targeting the default branch:
+Trong **Settings → Rules → Rulesets**, tạo branch ruleset cho default branch:
 
-- Require a pull request before merging.
-- Require at least one approving review and dismiss stale approvals.
-- Require conversation resolution.
-- Require the `Source CI` checks for Python 3.11 and 3.13.
-- Require the security checks that are supported by the repository plan.
-- Block force pushes and branch deletion.
-- Do not allow bypass except for a narrowly controlled repository owner or
-  recovery role.
+- Yêu cầu pull request trước khi merge khi có cộng tác viên.
+- Yêu cầu ít nhất một approval và dismiss stale approvals.
+- Yêu cầu conversation resolution.
+- Chặn force-push và branch deletion.
+- Chọn các check `Source CI` làm required sau khi chúng đã chạy ít nhất một lần.
 
-Enable private vulnerability reporting, Dependabot alerts and secret scanning
-where the repository plan supports them. Treat dependency-review availability
-as a repository-plan capability; do not weaken workflow permissions to work
-around an unavailable feature.
+Trong **Settings → Security**, bật Dependabot alerts, secret scanning và push
+protection nếu GitHub plan của repository hỗ trợ.
 
-## 3. Register the protected release runner
+## 3. Phát hành thủ công
 
-Register a dedicated Windows x64 self-hosted runner with all labels below:
+Quy trình khuyến nghị hiện tại:
+
+1. Build và xác minh local theo `docs/RELEASE_EXE.md`.
+2. Push `main` bằng Git.
+3. Tạo và push annotated tag `vX.Y.Z`.
+4. Tạo draft Release trên giao diện web.
+5. Upload toàn bộ file trong `release\`.
+6. Tải lại toàn bộ asset bằng trình duyệt và chạy
+   `verify-release.ps1 -ReleaseDirectory`.
+7. Chạy clean-machine/GPU/API acceptance.
+8. Publish dưới dạng pre-release nếu chưa ký số hoặc còn stable gate chưa đạt.
+
+## 4. Workflow build bundle tùy chọn
+
+`.github/workflows/release-windows.yml` không tạo GitHub Release. Workflow chỉ
+build, attest, xác minh và upload một artifact bundle để chủ sở hữu tải xuống rồi
+đưa lên Release bằng giao diện web.
+
+Nếu dùng workflow, đăng ký một Windows x64 self-hosted runner riêng cho
+repository với labels:
 
 ```text
 self-hosted
@@ -48,48 +65,29 @@ X64
 ai-subtitle-release
 ```
 
-The runner must be dedicated to this repository or a tightly scoped release
-runner group. It must not accept pull-request jobs. Install and pin:
+Runner không được chạy pull-request code không tin cậy. Cài:
 
-- Python 3.13.7 and the dependencies in
-  `packaging/release-requirements.txt`.
-- 7-Zip 24.09 or a reviewed replacement.
-- Inno Setup 6.7.3 or a reviewed compatible update.
-- Windows SDK SignTool.
-- FFmpeg 8.0.1 x64 at a path discoverable by the release script.
+- Python 3.13.7.
+- 7-Zip 24.09.
+- Inno Setup 6.7.3.
+- FFmpeg 8.0.1.
+- Windows SDK SignTool nếu build stable.
 
-Provision at least 40 GiB free disk space. Clear generated `build/`, `dist/`,
-`release/` and `release-staging/` between unrelated release attempts, while
-never deleting user data or signing material.
+Tạo environment `windows-release`. Chỉ stable build mới cần các environment
+secret:
 
-## 4. Create the protected environment
+```text
+SIGNING_PFX_BASE64
+SIGNING_PFX_PASSWORD
+```
 
-Create an environment named `windows-release`:
+Workflow dùng quyền `contents: read`; việc tạo và publish Release luôn là thao
+tác thủ công của chủ sở hữu trên web.
 
-- Require an owner/release-manager approval.
-- Restrict deployment branches/tags to protected release tags.
-- Store `SIGNING_PFX_BASE64` and `SIGNING_PFX_PASSWORD` only in this
-  environment.
-- Prefer a hardware-backed or managed signing service when available. The PFX
-  path is a compatibility fallback.
+## 5. Quy tắc release
 
-Pull-request and hosted CI workflows must never reference this environment or
-these secrets. The release workflow creates a temporary certificate file under
-`RUNNER_TEMP`, signs, verifies and removes it in an `always()` step.
-
-## 5. Release procedure
-
-1. Merge a version bump where `pyproject.toml`,
-   `packaging/release-config.json` and version resources match.
-2. Create an annotated tag `vX.Y.Z` on the reviewed commit.
-3. Push the tag or manually dispatch the workflow with the same version.
-4. Approve the `windows-release` environment deployment.
-5. Inspect the draft release and download it to a clean Windows VM.
-6. Run clean-install, corrupt-download, upgrade and uninstall scenarios.
-7. Record the separate NVIDIA GPU/API acceptance.
-8. Publish only after `verify-release.ps1 -GitHubDraft` passes.
-
-Stable releases require valid Authenticode signatures. If signing or any
-manual acceptance gate is unavailable, use a semantic pre-release version such
-as `0.1.0-rc.1` and publish only as a pre-release. Never replace assets on an
-already published tag.
+- Một tag tương ứng một commit và một bộ asset bất biến.
+- Không upload đè asset của tag đã publish; tạo version/tag mới.
+- Installer và runtime volume phải cùng owner/repository/tag.
+- Stable yêu cầu Authenticode hợp lệ.
+- Unsigned installer chỉ được phát hành dưới dạng pre-release.

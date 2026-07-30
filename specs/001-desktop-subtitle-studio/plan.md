@@ -68,8 +68,10 @@ Do Torch CUDA tạo runtime nhiều gigabyte trong khi mỗi GitHub Release asse
 - Pull request/push CI dùng Windows runner và dependency test nhẹ để chạy nhanh.
 - Full release build chạy trên clean, protected Windows x64 self-hosted runner có tối thiểu 40 GiB trống; không chạy mã PR không tin cậy trên runner này.
 - Release workflow chỉ chạy từ tag `v*` hoặc `workflow_dispatch` có approval.
-- Workflow tạo draft release, upload installer/runtime parts/manifest/checksums/notices, chạy verification rồi mới publish.
-- `GITHUB_TOKEN` chỉ được cấp `contents: write` trong release job.
+- Workflow build, attest, verify và upload một release bundle dưới dạng Actions
+  artifact; chủ sở hữu tạo draft Release và upload asset bằng giao diện web.
+- Workflow giữ `contents: read`; không cần GitHub CLI hoặc token ghi nội dung
+  repository để tạo Release.
 
 **Target Platform**: Windows 10/11 x64, NVIDIA GPU và driver tương thích runtime CUDA được bundle. Windows ARM và CPU-only STT nằm ngoài `v0.1.0`.
 
@@ -128,8 +130,11 @@ Protected release workflow
             +--> clean-VM install/upgrade/uninstall tests
             |
             v
-       Draft GitHub Release
+       Verified Actions artifact bundle
             |
+            +--> owner downloads bundle
+            +--> owner creates draft Release in GitHub web UI
+            +--> browser download + local verification
             +--> manual GPU/API acceptance
             |
             v
@@ -146,6 +151,9 @@ CHANGELOG.md
 SECURITY.md
 CONTRIBUTING.md
 THIRD_PARTY_NOTICES.md
+docs/
+├── GITHUB_SETUP.md
+└── RELEASE_EXE.md
 specs/001-desktop-subtitle-studio/
 ├── plan.md
 ├── research.md
@@ -294,9 +302,11 @@ scripts/
 3. Thêm dependency review, secret scan và Dependabot.
 4. Bật branch protection: required CI, không force-push `main`, review trước merge khi có cộng tác viên.
 5. `release-windows.yml` chỉ nhận protected tag/manual approval; build full trên clean self-hosted runner.
-6. Workflow tạo draft release, không overwrite immutable asset cùng version.
+6. Workflow tạo verified release bundle artifact; chủ sở hữu tạo draft Release
+   bằng giao diện web và không overwrite immutable asset cùng version.
 7. Upload installer, runtime volumes, manifest, checksums, notices, SBOM và provenance/attestation khi khả dụng.
-8. Verify toàn bộ asset tải lại từ draft release trước publish.
+8. Tải toàn bộ asset từ draft Release bằng trình duyệt và verify local trước
+   publish.
 9. Không cấp write token hoặc signing secret cho pull request jobs.
 
 **Exit gate R4**:
@@ -338,7 +348,8 @@ scripts/
 3. Tạo GitHub repository private, thêm remote và push `main`.
 4. Bật Actions/branch protection/secrets/environment.
 5. Merge release tooling qua pull request đã pass CI.
-6. Tạo tag annotated `v0.1.0-rc.1`; workflow tạo draft/pre-release.
+6. Tạo tag annotated `v0.1.0-rc.1`; workflow tạo verified bundle, sau đó chủ sở
+   hữu tạo draft/pre-release bằng giao diện web.
 7. Hoàn tất R3-R5 trên release candidate.
 8. Sửa lỗi bằng commit/tag RC mới; không thay asset của tag cũ.
 9. Khi stable gates pass, tạo tag `v0.1.0`, publish release và cập nhật README latest-download link.

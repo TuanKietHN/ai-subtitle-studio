@@ -29,17 +29,18 @@ def test_security_workflow_has_no_write_permissions_or_release_environment():
     assert "gitleaks" in text
 
 
-def test_release_workflow_is_protected_and_never_runs_for_pull_requests():
+def test_release_bundle_workflow_is_protected_and_never_runs_for_pull_requests():
     text = (WORKFLOWS / "release-windows.yml").read_text(encoding="utf-8")
     workflow = _load("release-windows.yml")
     triggers = workflow["on"]
     assert "pull_request" not in triggers
     assert "push" in triggers and "workflow_dispatch" in triggers
-    job = workflow["jobs"]["build-draft"]
+    job = workflow["jobs"]["build-bundle"]
     assert job["runs-on"] == ["self-hosted", "Windows", "X64", "ai-subtitle-release"]
     assert job["environment"] == "windows-release"
-    assert workflow["permissions"]["contents"] == "write"
-    assert "--draft" in text
+    assert workflow["permissions"]["contents"] == "read"
+    assert "gh release" not in text.lower()
+    assert "actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f" in text
     assert "actions/attest-build-provenance@96b4a1ef7235a096b17240c259729fdd70c83d45" in text
     assert "release/*" in text
     assert "SIGNING_PFX_BASE64" in text
@@ -57,6 +58,18 @@ def test_all_workflow_actions_are_pinned_to_commit_shas():
             assert all(character in "0123456789abcdef" for character in action_ref)
 
 
+def test_release_tooling_has_no_github_cli_dependency():
+    workflow = (WORKFLOWS / "release-windows.yml").read_text(encoding="utf-8").lower()
+    verifier = (ROOT / "scripts" / "verify-release.ps1").read_text(encoding="utf-8").lower()
+    quickstart = (ROOT / "specs" / "001-desktop-subtitle-studio" / "quickstart.md").read_text(
+        encoding="utf-8"
+    )
+    assert "gh release" not in workflow
+    assert "get-command gh" not in verifier
+    assert "githubdraft" not in verifier
+    assert "-GitHubDraft" not in quickstart
+
+
 def test_release_naming_is_versioned_and_repository_setup_documents_gates():
     release_workflow = (WORKFLOWS / "release-windows.yml").read_text(encoding="utf-8")
     setup = (ROOT / "docs" / "GITHUB_SETUP.md").read_text(encoding="utf-8")
@@ -67,6 +80,7 @@ def test_release_naming_is_versioned_and_repository_setup_documents_gates():
         "ai-subtitle-release",
         "windows-release",
         "SIGNING_PFX_BASE64",
-        "draft release",
+        "giao diện web",
+        "RELEASE_EXE.md",
     ):
         assert required.lower() in setup.lower()

@@ -1,4 +1,4 @@
-name: Windows release candidate
+name: Windows release bundle
 
 on:
   push:
@@ -20,7 +20,7 @@ on:
           - stable
 
 permissions:
-  contents: write
+  contents: read
   id-token: write
   attestations: write
 
@@ -29,7 +29,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build-draft:
+  build-bundle:
     runs-on: [self-hosted, Windows, X64, ai-subtitle-release]
     environment: windows-release
     timeout-minutes: 180
@@ -123,26 +123,20 @@ jobs:
 
       - name: Verify local release candidate
         shell: pwsh
-        run: ./scripts/verify-release.ps1 -Version "${{ steps.identity.outputs.version }}" -Local
+        run: ./scripts/verify-release.ps1 -Version "${{ steps.identity.outputs.version }}"
 
       - name: Attest build provenance
         uses: actions/attest-build-provenance@96b4a1ef7235a096b17240c259729fdd70c83d45 # v2
         with:
           subject-path: release/*
 
-      - name: Create immutable draft release
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          $Prerelease = if ("${{ steps.identity.outputs.channel }}" -eq "prerelease") { "--prerelease" } else { "" }
-          gh release create "${{ steps.identity.outputs.tag }}" release/* `
-            --repo "${{ github.repository }}" `
-            --target "${{ github.sha }}" `
-            --title "AI Subtitle Studio ${{ steps.identity.outputs.tag }}" `
-            --generate-notes `
-            --draft `
-            $Prerelease
+      - name: Upload verified release bundle
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: ai-subtitle-studio-${{ steps.identity.outputs.tag }}
+          path: release/*
+          if-no-files-found: error
+          retention-days: 30
 
       - name: Remove signing material
         if: always() && steps.signing.outputs.available == 'true'

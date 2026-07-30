@@ -8,12 +8,22 @@ try {
 
     $forbidden = @(
         '(^|/)outputs/.+',
-        '\.(sqlite|sqlite3|db)$',
+        '\.(sqlite|sqlite3|db)(-.+)?$',
         '(^|/)model_cache/',
+        '(^|/)models_cache/',
         '(^|/)dist/',
         '(^|/)build/',
         '(^|/)release/',
-        '\.(pfx|p12)$',
+        '(^|/)release-staging/',
+        '(^|/)packaging/vendor/',
+        '\.(exe|dll|msi|msix|appx|appxbundle|cab|iso|zip|tar|tgz)$',
+        '\.7z(\.\d+)?$',
+        '\.(mp4|mkv|mov|avi|webm|wav|mp3|flac|m4a|srt|vtt|ass)$',
+        '\.(pfx|p12|pem|key|cer|crt|jks|keystore)$',
+        '\.(log|dmp)$',
+        '(^|/)(credentials|service-account).+\.json$',
+        '(^|/)secrets/',
+        '(^|/)signing/',
         '(^|/)\.env($|\.)'
     )
 

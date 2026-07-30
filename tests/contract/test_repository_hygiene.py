@@ -8,12 +8,22 @@ ROOT = Path(__file__).resolve().parents[2]
 def test_gitignore_excludes_private_and_generated_release_data():
     ignored = (ROOT / ".gitignore").read_text(encoding="utf-8")
     required = (
+        "__pycache__/",
+        ".ruff_cache/",
+        ".venv/",
         "outputs/**",
         "!outputs/.gitkeep",
         "release/",
         "release-staging/",
+        "*.exe",
+        "*.7z.*",
+        "*.mp4",
+        "*.srt",
+        "*.sqlite3-*",
         ".env.*",
         "*.pfx",
+        "*.pem",
+        "*.key",
         "packaging/vendor/",
     )
     for pattern in required:

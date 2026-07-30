@@ -114,7 +114,8 @@ The installed runtime MUST:
 
 - A release starts as draft.
 - All assets are uploaded before verification.
-- Verification downloads the draft assets, checks names, sizes, SHA-256, manifest consistency and signatures.
+- The owner downloads draft assets with the browser and runs the local verifier
+  to check names, sizes, SHA-256, manifest consistency and signatures.
 - Manual Windows/GPU acceptance is recorded before stable publication.
 - Published assets are immutable; fixes use a new tag/version.
 - README's latest download link points to:

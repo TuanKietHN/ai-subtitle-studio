@@ -7,6 +7,15 @@ The project follows Semantic Versioning. Release candidates use the
 
 ## [Unreleased]
 
+### Changed
+
+- Expanded source-only ignore rules for Python caches, generated binaries,
+  release archives, user media/subtitles, local databases and signing material.
+- Replaced GitHub CLI release operations with browser-based publication and a
+  verified Actions artifact bundle.
+- Added a Vietnamese manual for building the Windows EXE/online installer,
+  pushing with Git and creating a GitHub Release from the web interface.
+
 ## [0.1.0-rc.1] - 2026-07-30
 
 ### Added
