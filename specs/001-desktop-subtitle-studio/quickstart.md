@@ -332,4 +332,18 @@ Last source validation run: 2026-07-30.
 - GitHub CLI 2.96.0 is installed locally, but no GitHub account is authenticated
   yet. Candidate URLs still use provisional owner `Kiet`; regenerate the
   manifest with the authenticated owner and source commit before upload.
-- Clean-VM, NVIDIA GPU/API and GitHub draft-release scenarios remain unexecuted until the following release phases are completed.
+- Partial NVIDIA acceptance ran on an RTX 5060 8 GiB (driver 610.88) with two
+  synthetic English MP4 files and the `medium` model. The isolated model cache
+  downloaded 9 files / 1,530,571,775 bytes; WhisperX logged mandatory Pyannote
+  VAD for both jobs; the queue completed sequentially and produced two
+  timestamped English SRT files with the expected text. The Python GPU process
+  exited and released its VRAM afterward.
+- Pyannote emitted its known TorchCodec built-in decoder warning because the
+  packaged FFmpeg is 8.x while TorchCodec probes 4-7. The real acceptance still
+  passed because this application first extracts a 16 kHz mono WAV through its
+  own FFmpeg pipeline before WhisperX/VAD processing.
+- Real running-job pause/cancel/retry, clean-install persistence, user-owned
+  video quality, API providers and Subtitle Edit remain manual gates; automated
+  contract/integration coverage for their state transitions is passing.
+- Clean-VM, real-video/API/Subtitle Edit and GitHub draft-release scenarios
+  remain unexecuted until external test inputs and authentication are available.
