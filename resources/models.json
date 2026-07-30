@@ -1,0 +1,33 @@
+{
+  "default_model": "large-v3",
+  "models": [
+    {
+      "id": "large-v3",
+      "display_name": "Large v3",
+      "description": "Default high-quality Whisper model for English lectures.",
+      "enabled": true,
+      "recommended_vram_gb": 10
+    },
+    {
+      "id": "medium",
+      "display_name": "Medium",
+      "description": "Lower VRAM option with faster processing.",
+      "enabled": true,
+      "recommended_vram_gb": 5
+    },
+    {
+      "id": "large-v3-turbo",
+      "display_name": "Large v3 Turbo",
+      "description": "Faster large-v3 family model when available.",
+      "enabled": true,
+      "recommended_vram_gb": 8
+    },
+    {
+      "id": "distil-large-v3",
+      "display_name": "Distil Large v3",
+      "description": "Distilled large-v3 model for speed-oriented workflows.",
+      "enabled": true,
+      "recommended_vram_gb": 6
+    }
+  ]
+}

@@ -1,0 +1,60 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+.vbsec-tmp/
+vbsec-reports/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Builds and packaging
+build/
+dist/
+release/
+release-staging/
+packaging/vendor/
+packaging/installer/generated-release-values.iss
+packaging/*.lock.json
+*.spec.tmp
+*.7z
+*.7z.*
+*.msi
+*.pfx
+*.p12
+*.cer
+*.sig
+*.sha256
+
+# Local app state
+*.sqlite
+*.sqlite3
+*.db
+model_cache/
+models_cache/
+logs/
+*.log
+tmp/
+*.tmp
+outputs/**
+!outputs/.gitkeep
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+credentials*.json
+secrets/
+
+# OS and IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

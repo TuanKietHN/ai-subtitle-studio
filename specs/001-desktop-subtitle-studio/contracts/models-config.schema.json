@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AI Subtitle Studio Model Catalog",
+  "type": "object",
+  "required": ["default_model", "models"],
+  "additionalProperties": false,
+  "properties": {
+    "default_model": {
+      "type": "string",
+      "const": "large-v3"
+    },
+    "models": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "display_name", "enabled"],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "enum": ["medium", "large-v3", "large-v3-turbo", "distil-large-v3"]
+          },
+          "display_name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "recommended_vram_gb": {
+            "type": "number",
+            "minimum": 0
+          }
+        }
+      },
+      "contains": {
+        "type": "object",
+        "required": ["id"],
+        "properties": {
+          "id": { "const": "large-v3" }
+        }
+      }
+    }
+  }
+}

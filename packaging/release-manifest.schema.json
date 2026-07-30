@@ -1,0 +1,161 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/OWNER/ai-subtitle-studio/raw/main/packaging/release-manifest.schema.json",
+  "title": "AI Subtitle Studio release manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "release",
+    "channel",
+    "minimum_windows_version",
+    "architecture",
+    "install_scope",
+    "installed_size_bytes",
+    "temporary_space_bytes",
+    "artifacts"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "release": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "app_version",
+        "git_commit",
+        "git_tag",
+        "built_at_utc",
+        "python_version",
+        "platform",
+        "whisperx_version",
+        "torch_version",
+        "cuda_runtime_version",
+        "pyinstaller_version",
+        "dependency_manifest_sha256"
+      ],
+      "properties": {
+        "app_version": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+\\.\\d+(?:-[0-9A-Za-z.-]+)?$"
+        },
+        "git_commit": {
+          "type": "string",
+          "pattern": "^(?:[0-9a-f]{40}|uncommitted)$"
+        },
+        "git_tag": {
+          "type": "string",
+          "pattern": "^v\\d+\\.\\d+\\.\\d+(?:-[0-9A-Za-z.-]+)?$"
+        },
+        "built_at_utc": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "python_version": {
+          "type": "string"
+        },
+        "platform": {
+          "const": "windows-x64"
+        },
+        "whisperx_version": {
+          "type": "string"
+        },
+        "torch_version": {
+          "type": "string"
+        },
+        "cuda_runtime_version": {
+          "type": "string"
+        },
+        "pyinstaller_version": {
+          "type": "string"
+        },
+        "dependency_manifest_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    },
+    "channel": {
+      "enum": [
+        "stable",
+        "prerelease"
+      ]
+    },
+    "minimum_windows_version": {
+      "const": "10"
+    },
+    "architecture": {
+      "const": "x64"
+    },
+    "install_scope": {
+      "const": "current_user"
+    },
+    "installed_size_bytes": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "temporary_space_bytes": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "artifacts": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "kind",
+          "size_bytes",
+          "sha256",
+          "download_url",
+          "required",
+          "signature_status"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[^/\\\\]+$"
+          },
+          "kind": {
+            "enum": [
+              "runtime_volume",
+              "installer",
+              "sbom",
+              "notices"
+            ]
+          },
+          "size_bytes": {
+            "type": "integer",
+            "minimum": 1,
+            "exclusiveMaximum": 2147483648
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "download_url": {
+            "type": "string",
+            "pattern": "^https://github\\.com/[^/]+/[^/]+/releases/download/v"
+          },
+          "required": {
+            "const": true
+          },
+          "volume_index": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "signature_status": {
+            "enum": [
+              "signed",
+              "unsigned_prerelease",
+              "not_applicable"
+            ]
+          }
+        }
+      }
+    }
+  }
+}

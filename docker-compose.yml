@@ -1,0 +1,50 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ai-subtitle-studio:dev
+    environment:
+      QT_QPA_PLATFORM: offscreen
+      AI_SUBTITLE_MODEL_CACHE: /app/model-cache
+      AI_SUBTITLE_OUTPUT_DIR: /app/outputs
+      AI_SUBTITLE_DATA_DIR: /app/data
+    volumes:
+      - model-cache:/app/model-cache
+      - outputs:/app/outputs
+      - app-data:/app/data
+    command: ["python", "-m", "ai_subtitle_studio.app"]
+
+  test:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ai-subtitle-studio:dev
+    environment:
+      QT_QPA_PLATFORM: offscreen
+    command: ["python", "-m", "pytest", "tests/unit", "tests/contract", "tests/integration", "tests/gui"]
+
+  shell:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ai-subtitle-studio:dev
+    environment:
+      QT_QPA_PLATFORM: offscreen
+      AI_SUBTITLE_MODEL_CACHE: /app/model-cache
+      AI_SUBTITLE_OUTPUT_DIR: /app/outputs
+      AI_SUBTITLE_DATA_DIR: /app/data
+    volumes:
+      - .:/workspace
+      - model-cache:/app/model-cache
+      - outputs:/app/outputs
+      - app-data:/app/data
+    working_dir: /workspace
+    command: ["bash"]
+    stdin_open: true
+    tty: true
+
+volumes:
+  model-cache:
+  outputs:
+  app-data:
