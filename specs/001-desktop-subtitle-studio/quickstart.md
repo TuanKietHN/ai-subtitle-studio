@@ -332,12 +332,20 @@ Last source validation run: 2026-07-30.
 - GitHub CLI 2.96.0 is installed locally, but no GitHub account is authenticated
   yet. Candidate URLs still use provisional owner `Kiet`; regenerate the
   manifest with the authenticated owner and source commit before upload.
-- Partial NVIDIA acceptance ran on an RTX 5060 8 GiB (driver 610.88) with two
+- NVIDIA acceptance ran on an RTX 5060 8 GiB (driver 610.88) with two
   synthetic English MP4 files and the `medium` model. The isolated model cache
   downloaded 9 files / 1,530,571,775 bytes; WhisperX logged mandatory Pyannote
   VAD for both jobs; the queue completed sequentially and produced two
   timestamped English SRT files with the expected text. The Python GPU process
   exited and released its VRAM afterward.
+- A second real-GPU control run used a 30-second synthetic MP4 and the same
+  isolated model cache. Cancel acknowledgement changed the active job to
+  `canceled` in 0.005 seconds without promoting an output; retry then completed
+  and wrote a valid English SRT. A running transcription reached a safe pause
+  checkpoint in 0.160 seconds, remained blocked until resume and then completed.
+  A separate shutdown during GPU processing persisted `retry_required`; a new
+  SQLite repository instance restored that state and the retried job completed
+  with a valid English SRT.
 - Real Subtitle Edit integration passed with the official portable Subtitle
   Edit 5.1.0 x64 build. The application launcher opened
   `sample-1.en.srt` from the GPU acceptance output; the process remained alive
@@ -349,8 +357,8 @@ Last source validation run: 2026-07-30.
   packaged FFmpeg is 8.x while TorchCodec probes 4-7. The real acceptance still
   passed because this application first extracts a 16 kHz mono WAV through its
   own FFmpeg pipeline before WhisperX/VAD processing.
-- Real running-job pause/cancel/retry, clean-install persistence, user-owned
-  video quality and API providers remain manual gates; automated
-  contract/integration coverage for their state transitions is passing.
+- Clean-install persistence, user-owned video quality and real API providers
+  remain manual gates; automated contract/integration coverage for their state
+  transitions is passing.
 - Clean-VM, real-video/API and GitHub draft-release scenarios remain unexecuted
   until external test inputs, environments and authentication are available.

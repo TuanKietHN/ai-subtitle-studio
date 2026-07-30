@@ -353,7 +353,7 @@
 
 - [X] T155 Run source, packaging, repository and workflow contract suites and update `specs/001-desktop-subtitle-studio/quickstart.md`
 - [ ] T156 Run clean Windows fresh install/interrupted download/upgrade/uninstall scenarios and record evidence in `specs/001-desktop-subtitle-studio/quickstart.md`
-- [ ] T157 Run NVIDIA two-video/model-download/queue/cancel/retry/recovery acceptance and record evidence in `specs/001-desktop-subtitle-studio/quickstart.md`
+- [X] T157 Run NVIDIA two-video/model-download/queue/cancel/retry/recovery acceptance and record evidence in `specs/001-desktop-subtitle-studio/quickstart.md`
 - [ ] T158 Run Google/DeepSeek/edit/English-Vietnamese-bilingual export acceptance and record evidence in `specs/001-desktop-subtitle-studio/quickstart.md`
 - [ ] T159 Run no-GPU, Subtitle Edit, logging redaction, SmartScreen and signature acceptance and record evidence in `specs/001-desktop-subtitle-studio/quickstart.md`
 - [ ] T160 Prepare versioned release notes and known issues in `CHANGELOG.md` and GitHub draft release
