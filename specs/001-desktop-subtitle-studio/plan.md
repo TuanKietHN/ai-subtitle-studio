@@ -24,14 +24,14 @@ Do Torch CUDA tạo runtime nhiều gigabyte trong khi mỗi GitHub Release asse
 
 ## Technical Context
 
-**Language/Version**: Python 3.11 là interpreter chuẩn để tạo release artifact. Python 3.11 và 3.13 được dùng trong test matrix nhẹ vì metadata WhisperX hỗ trợ `>=3.10,<3.14`. Không trộn package global với release venv.
+**Language/Version**: Python 3.13.7 là interpreter đã được pin và dùng để tạo release artifact hiện tại. Python 3.11 và 3.13 được dùng trong test matrix nhẹ vì metadata WhisperX hỗ trợ `>=3.10,<3.14`. Không trộn package global với release venv.
 
 **Primary Dependencies**: PySide6, `whisperx==3.8.6`, `torch~=2.8.0`, `torchvision~=0.23.0`, `torchaudio~=2.8.0`, httpx, keyring, PyInstaller 6.x, Inno Setup 6.x, ffmpeg, pytest và pytest-qt.
 
 **Dependency Reproducibility**:
 
 - `pyproject.toml` tiếp tục là source dependency cấp cao.
-- Tạo release lock cho Python 3.11/Windows x64, pin chính xác package build/runtime và lưu hash khi công cụ hỗ trợ.
+- Tạo release lock cho Python 3.13.7/Windows x64, pin chính xác package build/runtime và lưu hash khi công cụ hỗ trợ.
 - Cài Torch/TorchVision/TorchAudio từ index CUDA 12.8 trước, sau đó cài phần còn lại.
 - Release workflow xác nhận `pip check`, version runtime và dependency manifest trước khi build.
 - Không build release từ Python/package global của máy phát triển.
@@ -250,7 +250,7 @@ scripts/
 
 ### Phase R2 — Reproducible PyInstaller Runtime
 
-1. Tạo clean Python 3.11 release venv.
+1. Tạo clean Python 3.13.7 release venv.
 2. Pin release dependencies và kiểm `pip check`.
 3. Hoàn thiện spec/hook cho import động WhisperX, Pyannote, Faster-Whisper, CTranslate2, Torch, keyring backend, httpx certificates và package metadata.
 4. Bundle `models.json`, icon/version metadata, ffmpeg và notices.

@@ -36,7 +36,9 @@ The project follows Semantic Versioning. Release candidates use the
 ### Known issues and release gates
 
 - This candidate is unsigned and Windows SmartScreen may warn.
-- Clean-machine installer, NVIDIA GPU, real Google/DeepSeek credentials and
-  Subtitle Edit acceptance still require external test environments.
+- Clean-machine installer and real Google/DeepSeek credential acceptance still
+  require external test environments.
+- Real Subtitle Edit 5.1.0 portable launch acceptance passed locally with an
+  English SRT produced by the NVIDIA GPU scenario.
 - WhisperX 3.8.6 constrains Torch to 2.8.x and Hugging Face Hub below 1.0;
   upgrade before a stable release when upstream compatibility is available.

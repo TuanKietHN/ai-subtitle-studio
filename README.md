@@ -2,9 +2,9 @@
 
 AI Subtitle Studio là ứng dụng desktop Windows dùng Python + PySide6 để tạo phụ đề tiếng Anh từ video `.mp4` bằng WhisperX, dịch sang tiếng Việt qua Google Cloud Translation API v3 hoặc DeepSeek, chỉnh sửa phụ đề và xuất file `.srt`.
 
-> Trạng thái phát hành: source và test suite đang được hoàn thiện thành bản
-> Windows `v0.1.0`. Chưa có installer stable được công bố; không tải executable
-> từ nguồn không chính thức.
+> Trạng thái phát hành: bản Windows `v0.1.0-rc.1` đã được build và xác minh
+> cục bộ, nhưng chưa được công bố trên GitHub. Đây là pre-release chưa ký số;
+> không tải executable từ nguồn không chính thức.
 
 ## Repository và giấy phép
 
@@ -230,4 +230,7 @@ python -m compileall src tests
 python -m pytest tests/unit tests/contract tests/integration tests/gui
 ```
 
-Kết quả hiện tại: `50 passed`. Lần này chưa chạy lại `pip check`.
+Kết quả RC hiện tại: `131 passed`; `compileall`, `pip check`, kiểm tra repository,
+PowerShell syntax, frozen smoke và local release verification đều đạt. Bằng
+chứng chi tiết và các cổng external còn mở nằm trong
+`specs/001-desktop-subtitle-studio/quickstart.md`.

@@ -338,12 +338,19 @@ Last source validation run: 2026-07-30.
   VAD for both jobs; the queue completed sequentially and produced two
   timestamped English SRT files with the expected text. The Python GPU process
   exited and released its VRAM afterward.
+- Real Subtitle Edit integration passed with the official portable Subtitle
+  Edit 5.1.0 x64 build. The application launcher opened
+  `sample-1.en.srt` from the GPU acceptance output; the process remained alive
+  during the observation window and was then closed by the validation command.
+- Windows Sandbox is not installed on this builder, so a distinct clean
+  Windows VM or machine is still required for fresh-install, interrupted
+  download, upgrade and uninstall evidence.
 - Pyannote emitted its known TorchCodec built-in decoder warning because the
   packaged FFmpeg is 8.x while TorchCodec probes 4-7. The real acceptance still
   passed because this application first extracts a 16 kHz mono WAV through its
   own FFmpeg pipeline before WhisperX/VAD processing.
 - Real running-job pause/cancel/retry, clean-install persistence, user-owned
-  video quality, API providers and Subtitle Edit remain manual gates; automated
+  video quality and API providers remain manual gates; automated
   contract/integration coverage for their state transitions is passing.
-- Clean-VM, real-video/API/Subtitle Edit and GitHub draft-release scenarios
-  remain unexecuted until external test inputs and authentication are available.
+- Clean-VM, real-video/API and GitHub draft-release scenarios remain unexecuted
+  until external test inputs, environments and authentication are available.
