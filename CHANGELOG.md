@@ -18,6 +18,8 @@ The project follows Semantic Versioning. Release candidates use the
 - Added a Vietnamese manual for building the Windows EXE/online installer,
   pushing with Git and creating a GitHub Release from the web interface, with
   beginner-friendly explanations, validation steps and troubleshooting.
+- Scoped SHA-256 checksum generation and verification to the current version's
+  manifest and assets so files from older releases cannot leak into a bundle.
 
 ## [0.1.0-rc.1] - 2026-07-30
 

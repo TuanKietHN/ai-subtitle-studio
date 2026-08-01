@@ -148,9 +148,17 @@ foreach ($Volume in $RuntimePackage.volumes) {
 $Lines | Set-Content -Encoding utf8 $GeneratedValues
 
 $ChecksumsPath = Join-Path $ReleaseDirectory "SHA256SUMS-v$Version.txt"
-$ChecksumFiles = Get-ChildItem -LiteralPath $ReleaseDirectory -File |
-    Where-Object { $_.FullName -ne $ChecksumsPath } |
-    Sort-Object Name
+$ChecksumNames = @(
+    @($Artifacts | ForEach-Object { $_.name })
+    (Split-Path -Leaf $ManifestPath)
+) | Sort-Object -Unique
+$ChecksumFiles = @($ChecksumNames | ForEach-Object {
+    $ChecksumPath = Join-Path $ReleaseDirectory $_
+    if (-not (Test-Path -LiteralPath $ChecksumPath -PathType Leaf)) {
+        throw "Missing checksum input for ${Tag}: $ChecksumPath"
+    }
+    Get-Item -LiteralPath $ChecksumPath
+})
 $ChecksumLines = @($ChecksumFiles | ForEach-Object {
     "$((Get-FileHash -Algorithm SHA256 -LiteralPath $_.FullName).Hash.ToLowerInvariant())  $($_.Name)"
 })

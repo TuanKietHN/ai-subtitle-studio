@@ -28,6 +28,14 @@ $ChecksumsPath = Join-Path $VerificationDirectory "SHA256SUMS-v$Version.txt"
 if (-not (Test-Path -LiteralPath $ChecksumsPath -PathType Leaf)) {
     throw "Missing checksum file: $ChecksumsPath"
 }
+$Manifest = Get-Content -Raw $ManifestPath | ConvertFrom-Json
+$ExpectedChecksumNames = @(
+    @($Manifest.artifacts | ForEach-Object { $_.name })
+    (Split-Path -Leaf $ManifestPath)
+) | Sort-Object -Unique
+$SeenChecksumNames = [Collections.Generic.HashSet[string]]::new(
+    [StringComparer]::OrdinalIgnoreCase
+)
 foreach ($Line in Get-Content -LiteralPath $ChecksumsPath) {
     if ($Line -notmatch '^([0-9a-f]{64})  (.+)$') {
         throw "Invalid checksum line: $Line"
@@ -40,6 +48,9 @@ foreach ($Line in Get-Content -LiteralPath $ChecksumsPath) {
     if (-not $Path.StartsWith($VerificationPrefix, [StringComparison]::OrdinalIgnoreCase)) {
         throw "Checksum references a path outside the release directory: $($Matches[2])"
     }
+    if (-not $SeenChecksumNames.Add($Matches[2])) {
+        throw "Duplicate checksum entry: $($Matches[2])"
+    }
     if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
         throw "Checksum references missing asset: $($Matches[2])"
     }
@@ -48,8 +59,15 @@ foreach ($Line in Get-Content -LiteralPath $ChecksumsPath) {
         throw "Checksum mismatch: $($Matches[2])"
     }
 }
+$ChecksumDifference = @(Compare-Object `
+    -ReferenceObject $ExpectedChecksumNames `
+    -DifferenceObject @($SeenChecksumNames) `
+    -CaseSensitive
+)
+if ($ChecksumDifference) {
+    throw 'Checksum file does not contain exactly the manifest and current-version release assets.'
+}
 
-$Manifest = Get-Content -Raw $ManifestPath | ConvertFrom-Json
 if ($Manifest.channel -eq 'stable') {
     $Installer = $Manifest.artifacts | Where-Object kind -eq 'installer'
     if (-not $Installer -or $Installer.signature_status -ne 'signed') {

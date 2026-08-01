@@ -232,7 +232,7 @@ python -m compileall src tests
 python -m pytest tests/unit tests/contract tests/integration tests/gui
 ```
 
-Kết quả hiện tại: `132 passed`; `compileall`, `pip check`, kiểm tra repository,
+Kết quả hiện tại: `133 passed`; `compileall`, `pip check`, kiểm tra repository,
 PowerShell syntax, frozen smoke và local release verification đều đạt. Bằng
 chứng chi tiết và các cổng external còn mở nằm trong
 `specs/001-desktop-subtitle-studio/quickstart.md`.

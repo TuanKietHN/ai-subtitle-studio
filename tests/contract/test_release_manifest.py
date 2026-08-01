@@ -26,3 +26,14 @@ def test_manifest_generator_uses_exact_tag_urls_hashes_and_installer_values():
         "RuntimeVolumeCount",
     ):
         assert required in script
+
+
+def test_release_checksums_are_scoped_to_the_current_manifest_assets():
+    generator = (ROOT / "scripts" / "generate-release-manifest.ps1").read_text(encoding="utf-8")
+    verifier = (ROOT / "scripts" / "verify-release.ps1").read_text(encoding="utf-8")
+
+    assert "@($Artifacts | ForEach-Object { $_.name })" in generator
+    assert "Get-ChildItem -LiteralPath $ReleaseDirectory -File" not in generator
+    assert "$ExpectedChecksumNames" in verifier
+    assert "Compare-Object" in verifier
+    assert "Duplicate checksum entry" in verifier
