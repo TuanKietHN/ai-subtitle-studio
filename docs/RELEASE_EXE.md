@@ -491,10 +491,15 @@ pre-release.
 Xem danh sách file:
 
 ```powershell
-Get-ChildItem .\release -File | Select-Object Name, Length
+Get-ChildItem .\release -File |
+  Where-Object Name -Like "*v$version*" |
+  Select-Object Name, Length
 ```
 
 Chỉ tiếp tục nếu `verify-release.ps1` thành công.
+
+Thư mục `release/` có thể giữ asset của nhiều version. Khi đó, chỉ upload những
+file có đúng `v$version` trong tên. Không upload file RC.1 vào Release RC.2.
 
 Thư mục `release/` được `.gitignore` bỏ qua. Đó là điều đúng: các file này sẽ
 được upload vào trang Release, không được commit.
@@ -591,7 +596,9 @@ người dùng có thể tải nhầm asset cũ và gặp lỗi hash.
 
 8. Với version có `rc`, `alpha` hoặc `beta`, chọn **Set as a pre-release**.
 9. Không chọn nó là bản latest ổn định.
-10. Kéo **toàn bộ file** trong thư mục `release/` vào khu vực upload asset.
+10. Kéo **toàn bộ file của đúng version hiện tại** vào khu vực upload asset.
+    Ví dụ với RC.2, chỉ chọn các file có `v0.1.0-rc.2` trong tên; không kéo các
+    file RC.1 đang được giữ lại trong cùng thư mục.
 11. Chờ đến khi tất cả thanh upload hoàn thành.
 12. Kiểm tra không có file nào từ 2 GiB trở lên.
 13. Bấm **Save draft** trước để kiểm tra.
