@@ -40,7 +40,7 @@ jobs:
         with:
           python-version: "3.13"
       - name: Scan tracked history for secrets
-        uses: gitleaks/gitleaks-action@dcedce43c6f43de0b836d1fe38946645c9c638dc # v2
+        uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2
       - name: Audit pinned release inputs
         shell: pwsh
         run: |
