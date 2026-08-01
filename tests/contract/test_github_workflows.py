@@ -27,6 +27,13 @@ def test_security_workflow_has_no_write_permissions_or_release_environment():
     assert "SIGNING_" not in text
     assert "dependency-review-action" in text
     assert "gitleaks" in text
+    assert "gitleaks/gitleaks-action" not in text
+    assert 'GITLEAKS_VERSION: "8.30.1"' in text
+    assert 'GITLEAKS_LINUX_X64_SHA256: "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb"' in text
+    assert "fetch-depth: 0" in text
+    assert '"${RUNNER_TEMP}/gitleaks" git' in text
+    assert '--log-opts="--all"' in text
+    assert "ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION" not in text
 
 
 def test_release_bundle_workflow_is_protected_and_never_runs_for_pull_requests():
@@ -40,8 +47,8 @@ def test_release_bundle_workflow_is_protected_and_never_runs_for_pull_requests()
     assert job["environment"] == "windows-release"
     assert workflow["permissions"]["contents"] == "read"
     assert "gh release" not in text.lower()
-    assert "actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f" in text
-    assert "actions/attest-build-provenance@96b4a1ef7235a096b17240c259729fdd70c83d45" in text
+    assert "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a" in text
+    assert "actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373" in text
     assert "release/*" in text
     assert "SIGNING_PFX_BASE64" in text
     assert "pull_request_target" not in text
