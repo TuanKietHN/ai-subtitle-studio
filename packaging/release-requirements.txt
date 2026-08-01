@@ -2,7 +2,7 @@
 # declared in release-config.json before this file is installed.
 PySide6==6.11.1
 whisperx==3.8.6
-torch==2.8.0
+torch==2.13.0
 torchvision==0.23.0
 torchaudio==2.8.0
 httpx==0.28.1

@@ -14,7 +14,7 @@ dependencies = [
     # whisperx stable checked 2026-07-30
     "whisperx==3.8.6",
     # WhisperX 3.8.6 companion versions; install CUDA wheels via setup script/Dockerfile.
-    "torch~=2.8.0",
+    "torch>=2.8,<2.14",
     "torchvision~=0.23.0",
     "torchaudio~=2.8.0",
     "httpx>=0.27",
