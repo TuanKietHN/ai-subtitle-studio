@@ -7,6 +7,15 @@ The project follows Semantic Versioning. Release candidates use the
 
 ## [Unreleased]
 
+## [0.1.0-rc.3] - 2026-08-01
+
+### Fixed
+
+- Replaced the Node 20 Gitleaks action with a checksum-pinned Gitleaks CLI scan
+  that handles the repository's root commit and scans the complete history.
+- Updated official GitHub Actions to Node 24-compatible releases while keeping
+  every action reference pinned to an immutable commit SHA.
+
 ## [0.1.0-rc.2] - 2026-08-01
 
 ### Changed

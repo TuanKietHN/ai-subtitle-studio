@@ -17,12 +17,12 @@ VSVersionInfo(
         [
           StringStruct('CompanyName', 'AI Subtitle Studio'),
           StringStruct('FileDescription', 'AI Subtitle Studio'),
-          StringStruct('FileVersion', '0.1.0-rc.2'),
+          StringStruct('FileVersion', '0.1.0-rc.3'),
           StringStruct('InternalName', 'ai-subtitle-studio'),
           StringStruct('LegalCopyright', 'Copyright (c) 2026 AI Subtitle Studio contributors'),
           StringStruct('OriginalFilename', 'ai-subtitle-studio.exe'),
           StringStruct('ProductName', 'AI Subtitle Studio'),
-          StringStruct('ProductVersion', '0.1.0-rc.2')
+          StringStruct('ProductVersion', '0.1.0-rc.3')
         ]
       )
     ]),
