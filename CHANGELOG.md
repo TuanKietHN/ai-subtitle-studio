@@ -7,6 +7,14 @@ The project follows Semantic Versioning. Release candidates use the
 
 ## [Unreleased]
 
+## [0.1.0-rc.4] - 2026-08-01
+
+### Fixed
+
+- Skipped GitHub artifact attestation when it is unavailable for a private
+  repository while preserving verified bundle upload; Enterprise Cloud private
+  repositories can explicitly enable the step with a repository variable.
+
 ## [0.1.0-rc.3] - 2026-08-01
 
 ### Fixed

@@ -51,9 +51,13 @@ Quy trình khuyến nghị hiện tại:
 
 ## 4. Workflow build bundle tùy chọn
 
-`.github/workflows/release-windows.yml` không tạo GitHub Release. Workflow chỉ
-build, attest, xác minh và upload một artifact bundle để chủ sở hữu tải xuống rồi
-đưa lên Release bằng giao diện web.
+`.github/workflows/release-windows.yml` không tạo GitHub Release. Workflow build,
+xác minh và upload một artifact bundle để chủ sở hữu tải xuống rồi đưa lên
+Release bằng giao diện web. Bước provenance attestation tự chạy với repository
+public. GitHub Free/Pro/Team không hỗ trợ artifact attestation cho private
+repository; vì vậy workflow bỏ qua bước này nhưng vẫn upload bundle. Nếu private
+repository thuộc GitHub Enterprise Cloud, tạo repository variable
+`ENABLE_PRIVATE_ATTESTATIONS=true` để bật lại attestation.
 
 Nếu dùng workflow, đăng ký một Windows x64 self-hosted runner riêng cho
 repository với labels:

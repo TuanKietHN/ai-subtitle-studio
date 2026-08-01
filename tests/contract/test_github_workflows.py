@@ -49,6 +49,11 @@ def test_release_bundle_workflow_is_protected_and_never_runs_for_pull_requests()
     assert "gh release" not in text.lower()
     assert "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a" in text
     assert "actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373" in text
+    assert "github.event.repository.visibility == 'public'" in text
+    assert "vars.ENABLE_PRIVATE_ATTESTATIONS == 'true'" in text
+    assert text.index("Upload verified release bundle") < text.index(
+        "Attest build provenance when supported"
+    )
     assert "release/*" in text
     assert "SIGNING_PFX_BASE64" in text
     assert "pull_request_target" not in text

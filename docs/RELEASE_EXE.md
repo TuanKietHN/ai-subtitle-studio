@@ -47,7 +47,7 @@ AI-Subtitle-Studio-Setup-vX.Y.Z.exe
 Ví dụ:
 
 ```text
-AI-Subtitle-Studio-Setup-v0.1.0-rc.3.exe
+AI-Subtitle-Studio-Setup-v0.1.0-rc.4.exe
 ```
 
 Đây là **online installer**, nghĩa là một trình cài đặt nhỏ có nhiệm vụ:
@@ -169,7 +169,7 @@ Trong các ví dụ bên dưới, hãy thay:
 Khai báo ba giá trị để các lệnh phía sau dễ đọc:
 
 ```powershell
-$version = "0.1.0-rc.3"
+$version = "0.1.0-rc.4"
 $owner = "TEN_GITHUB_CUA_BAN"
 $repository = "ai-subtitle-studio"
 ```
@@ -398,7 +398,7 @@ $repository
 Nếu PowerShell đã được đóng và mở lại, khai báo lại:
 
 ```powershell
-$version = "0.1.0-rc.3"
+$version = "0.1.0-rc.4"
 $owner = "TEN_GITHUB_CUA_BAN"
 $repository = "ai-subtitle-studio"
 ```
@@ -527,7 +527,7 @@ git push origin "v$version"
 Ví dụ tag thực tế:
 
 ```text
-v0.1.0-rc.3
+v0.1.0-rc.4
 ```
 
 ### Nếu Git báo tag đã tồn tại
@@ -545,13 +545,13 @@ Hai lệnh cuối phải trả về cùng mã commit nếu tag thuộc đúng ph
 Nếu tag đã được công bố nhưng trỏ sai, cách an toàn là tăng version, ví dụ từ:
 
 ```text
-0.1.0-rc.3
+0.1.0-rc.4
 ```
 
 thành:
 
 ```text
-0.1.0-rc.4
+0.1.0-rc.5
 ```
 
 Sau đó commit, build và tạo tag mới. Không tái sử dụng một tag đã phát hành vì
@@ -565,11 +565,11 @@ người dùng có thể tải nhầm asset cũ và gặp lỗi hash.
 2. Ở bên phải danh sách file, bấm **Releases**.
 3. Bấm **Draft a new release**.
 4. Bấm **Choose a tag**.
-5. Chọn tag `v0.1.0-rc.3`, hoặc tag đúng với `$version`.
+5. Chọn tag `v0.1.0-rc.4`, hoặc tag đúng với `$version`.
 6. Nhập tiêu đề:
 
    ```text
-   AI Subtitle Studio v0.1.0-rc.3
+   AI Subtitle Studio v0.1.0-rc.4
    ```
 
 7. Trong phần mô tả, có thể viết:
@@ -583,7 +583,7 @@ người dùng có thể tải nhầm asset cũ và gặp lỗi hash.
 
    ## Cách cài
 
-   1. Tải AI-Subtitle-Studio-Setup-v0.1.0-rc.3.exe.
+   1. Tải AI-Subtitle-Studio-Setup-v0.1.0-rc.4.exe.
    2. Mở file vừa tải.
    3. Làm theo hướng dẫn trên màn hình.
 
@@ -597,8 +597,8 @@ người dùng có thể tải nhầm asset cũ và gặp lỗi hash.
 8. Với version có `rc`, `alpha` hoặc `beta`, chọn **Set as a pre-release**.
 9. Không chọn nó là bản latest ổn định.
 10. Kéo **toàn bộ file của đúng version hiện tại** vào khu vực upload asset.
-    Ví dụ với RC.3, chỉ chọn các file có `v0.1.0-rc.3` trong tên; không kéo các
-    file RC.2 đang được giữ lại trong cùng thư mục.
+    Ví dụ với RC.4, chỉ chọn các file có `v0.1.0-rc.4` trong tên; không kéo các
+    file RC.3 đang được giữ lại trong cùng thư mục.
 11. Chờ đến khi tất cả thanh upload hoàn thành.
 12. Kiểm tra không có file nào từ 2 GiB trở lên.
 13. Bấm **Save draft** trước để kiểm tra.
@@ -645,7 +645,7 @@ Nếu ứng dụng vẫn chạy, bộ cài đã thực hiện đúng nhiệm v�
 Tải tất cả asset bằng trình duyệt vào một thư mục riêng, ví dụ:
 
 ```text
-C:\Temp\ai-subtitle-studio-v0.1.0-rc.3
+C:\Temp\ai-subtitle-studio-v0.1.0-rc.4
 ```
 
 Sau đó chạy:
@@ -653,7 +653,7 @@ Sau đó chạy:
 ```powershell
 .\scripts\verify-release.ps1 `
   -Version $version `
-  -ReleaseDirectory "C:\Temp\ai-subtitle-studio-v0.1.0-rc.3"
+  -ReleaseDirectory "C:\Temp\ai-subtitle-studio-v0.1.0-rc.4"
 ```
 
 Script kiểm tra:
@@ -708,8 +708,8 @@ Quy trình cho version mới:
 11. Upload toàn bộ asset.
 12. Publish và kiểm tra trên máy sạch.
 
-Không trộn asset của hai version. Không lấy Setup của `rc.2` ghép với runtime
-của `rc.3`.
+Không trộn asset của hai version. Không lấy Setup của `rc.3` ghép với runtime
+của `rc.4`.
 
 ---
 
