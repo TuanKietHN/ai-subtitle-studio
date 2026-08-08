@@ -198,13 +198,113 @@
 - Run untrusted PR code on the self-hosted runner: rejected as a security risk.
 - Build stable releases manually on a developer workstation: rejected because it is not auditable or reproducible.
 
-## Decision: Private-first repository and signed stable releases
+## Decision: Public distribution without an implied source license, and signed stable releases
 
-**Decision**: Initialize and push the repository as private. Public visibility requires an explicit source-license decision and completed third-party notices. Authenticode signing is mandatory for a stable/latest release; unsigned artifacts may only be pre-releases.
+**Supersedes private-first decision**: 2026-08-08
 
-**Rationale**: The repository owner has not selected an open-source license, and Windows SmartScreen trust materially affects installation usability. Private-first prevents accidental publication with ambiguous rights; a pre-release path still allows validation before a signing certificate is available.
+**Decision**: The existing repository is public so end users can download release assets without GitHub authentication. No source `LICENSE` has been selected, so public visibility MUST NOT be described as an open-source grant or permission to reuse the code. Authenticode signing remains mandatory for a stable/latest release; unsigned artifacts may only be pre-releases.
+
+**Rationale**: The online installer needs anonymous access to versioned runtime assets, while source licensing remains an owner/legal decision independent of repository visibility. Explicitly documenting the absence of a license avoids silently granting rights. A pre-release path still allows validation before a signing certificate is available.
 
 **Alternatives considered**:
 - Assume MIT license: rejected because licensing is an owner/legal decision, not an implementation default.
-- Publish public source without a license: rejected because reuse rights would be ambiguous.
+- Move the current release repository back to private: rejected because the online installer has no GitHub login flow and ordinary users must be able to download runtime assets.
 - Call an unsigned installer stable: rejected because it undermines the requested easy-download experience.
+
+# RC5 Installer and Low-VRAM Research Addendum
+
+**Checked**: 2026-08-01
+
+## Decision: Create the install root before an atomic same-volume runtime swap
+
+**Decision**: RC5 creates `{app}` explicitly with `ForceDirectories`, stages the extracted bundle at `{app}\runtime.staging`, and only then swaps `runtime -> runtime.previous` and `runtime.staging -> runtime`. The previous runtime is deleted only after the new executable passes validation.
+
+**Rationale**: The RC4 setup log proved download, SHA-256 verification and extraction succeeded, then activation failed. Inno Setup calls `CurStepChanged(ssInstall)` just before the actual installation starts, so `{app}` is not guaranteed to exist at that point. `RenameFile` also returns false when the target cannot be created or already exists. Keeping staging and active under `{app}` ensures the rename remains on one volume and can be rolled back atomically.
+
+**Alternatives considered**:
+- Keep staging in `{tmp}` and only add a retry: rejected because `%TEMP%` can be on another volume and a directory rename is no longer guaranteed atomic.
+- Move activation to `ssPostInstall` without creating `{app}` explicitly: rejected because it leaves lifecycle ordering implicit and weakens rollback/error reporting.
+- Copy the 5+ GiB tree instead of rename: rejected because it needs more time/disk and exposes a partially active runtime.
+
+**Sources**:
+- https://jrsoftware.org/ishelp/topic_scriptevents.htm
+- https://jrsoftware.org/ishelp/topic_isxfunc_renamefile.htm
+
+## Decision: Use verified local/cache sources, BITS resume and an Inno fallback
+
+**Decision**: Resolve each runtime volume in this order: verified file beside Setup, verified persistent cache, resumable BITS foreground transfer into `.part`, then Inno HTTPS fallback. `CreateDownloadPage` remains the installer progress surface and displays aggregate bytes, speed and ETA. Every source is promoted only after SHA-256 verification.
+
+**Rationale**: `DownloadTemporaryFile` follows HTTPS redirects and verifies SHA-256, but downloads into Setup's temporary directory and does not define a persistent partial-resume contract. BITS persists transfer state and resumes after connectivity returns. Foreground priority is appropriate because the user is actively waiting and all runtime volumes are below 2 GiB. GitHub/proxy range support must be checked; a native Inno fallback prevents BITS policy/proxy limitations from becoming an install blocker.
+
+**Alternatives considered**:
+- Continue using only `DownloadTemporaryFile`: rejected because activation/extraction failures force a complete 2.33 GiB redownload after Setup cleanup.
+- Trust a same-name/same-size local file: rejected because it weakens the existing supply-chain integrity contract.
+- Add a third-party parallel downloader: deferred because it adds another binary, license and signing surface; Windows BITS is already in the supported OS.
+- BITS background priority: rejected for the interactive installer because it intentionally uses idle bandwidth and can look stalled.
+
+**Sources**:
+- https://jrsoftware.org/ishelp/topic_isxfunc_downloadtemporaryfile.htm
+- https://jrsoftware.org/ishelp/topic_isxfunc_createdownloadpage.htm
+- https://learn.microsoft.com/en-us/windows/win32/bits/about-bits
+- https://learn.microsoft.com/en-us/windows/win32/api/bits/ne-bits-bg_job_priority
+- https://learn.microsoft.com/en-us/windows/win32/bits/best-practices-when-using-bits
+- https://learn.microsoft.com/en-us/windows/win32/bits/http-requirements-for-bits-downloads
+
+## Decision: Identify the runtime bundle independently from the release filename
+
+**Decision**: Generate a deterministic `runtime_bundle_id` from the ordered volume hashes/sizes plus frozen build identity. Store it in the release manifest, generated installer constants, persistent cache metadata and installed runtime marker.
+
+**Rationale**: Versioned filenames alone cannot prove whether an upgrade actually changes the runtime. An identity marker allows a repaired installer or metadata-only upgrade to skip downloading/extracting a byte-identical 2.33 GiB bundle while still failing closed when any required artifact differs.
+
+**Alternatives considered**:
+- Compare only application version: rejected because two builds of one version must never be assumed identical and immutable-release policy forbids overwriting assets.
+- Compare only volume names: rejected because names are not integrity evidence.
+- Always redownload on every upgrade: rejected because it does not meet the explicit upgrade UX requirement.
+
+## Decision: Add a config-driven 4 GiB execution profile without changing the default model
+
+**Decision**: Keep `large-v3` as the sole default, add `small.en` and `small` to `models.json`, detect usable VRAM and supported CTranslate2 compute types, and recommend a 4 GiB profile of `small.en + int8_float16 + batch_size=1` for English lectures. The user confirms any model change.
+
+**Rationale**: The current smallest catalog entry recommends 5 GiB and the engine fixes `float16`. Faster-Whisper's published benchmark shows large-model FP16 already exceeds 4 GiB while INT8 is materially lower. CTranslate2 supports `int8_float16` on NVIDIA GPUs with suitable compute capability and exposes runtime capability discovery. A smaller English model plus batch 1 leaves additional headroom for WhisperX alignment and the mandatory VAD.
+
+**Alternatives considered**:
+- Hard-code special handling for the string `RTX 2050`: rejected because VRAM/capability, not marketing name, determines the safe profile.
+- Automatically replace `large-v3` silently: rejected because it changes quality expectations and conflicts with the config/default contract.
+- Keep `medium + float16`: rejected because its project recommendation is 5 GiB and does not provide a defensible 4 GiB release gate.
+- Add CPU fallback: rejected because CPU STT remains outside the current specification and constitution-aligned release scope.
+
+**Sources**:
+- https://github.com/SYSTRAN/faster-whisper/blob/master/README.md
+- https://opennmt.net/CTranslate2/quantization.html
+- https://opennmt.net/CTranslate2/python/ctranslate2.get_supported_compute_types.html
+- https://github.com/m-bain/whisperX
+
+## Decision: Bound peak VRAM by separating ASR and alignment lifetimes
+
+**Decision**: After transcription, release all ASR model references before loading the alignment model; after alignment, release alignment references. Synchronize only when required, run `gc.collect()`, then call `torch.cuda.empty_cache()` for unused cached blocks. Classify CUDA OOM and retry at most once with the same model and a smaller effective batch.
+
+**Rationale**: The current wrapper keeps the ASR model alive while loading alignment, increasing peak memory. PyTorch documents that `empty_cache()` only releases unoccupied cached memory and does not free live tensors, so object lifetime must be fixed first. One bounded retry handles fragmentation or unexpectedly high input pressure without hiding persistent incompatibility.
+
+**Alternatives considered**:
+- Call `empty_cache()` while model references remain: rejected because it cannot free occupied tensor memory.
+- Retry indefinitely: rejected because it can loop on every 4 GiB device without changing the cause.
+- Silently change the model on OOM: rejected because the user must control the accuracy tradeoff.
+
+**Source**:
+- https://docs.pytorch.org/docs/main/generated/torch.cuda.memory.empty_cache.html
+
+## Decision: Preserve user data by default and make destructive uninstall choices explicit
+
+**Decision**: Default uninstall removes installer-owned binaries and shortcuts only. A first unchecked option removes model/cache/log/history/settings/API keys through an application cleanup helper. A separate unchecked output option shows the exact path and requires a second confirmation; custom output cleanup is restricted to app-owned files.
+
+**Rationale**: Model/database/log files, QSettings registry values and Credential Manager secrets live outside `{app}` and cannot all be handled correctly by `[UninstallDelete]`. Conversely, recursive deletion of a user-selected output directory could remove unrelated work. Separate choices make retention predictable and destructive scope reviewable.
+
+**Alternatives considered**:
+- Always delete all user data: rejected because uninstall must not unexpectedly destroy model downloads, job history or subtitles.
+- Always preserve API keys: rejected because users need a privacy-complete removal path.
+- Delete an arbitrary custom output directory recursively: rejected because ownership cannot be inferred from directory selection alone.
+
+**Sources**:
+- https://jrsoftware.org/ishelp/topic_setup_uninstallable.htm
+- https://jrsoftware.org/ishelp/topic_setup_createuninstallregkey.htm
+- https://doc.qt.io/qt-6/qsettings.html

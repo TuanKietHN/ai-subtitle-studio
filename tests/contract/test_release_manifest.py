@@ -13,6 +13,8 @@ def test_release_manifest_schema_encodes_size_hash_and_stable_fields():
     assert artifact["properties"]["size_bytes"]["exclusiveMaximum"] == 2 * 1024 * 1024 * 1024
     assert artifact["properties"]["sha256"]["pattern"] == "^[0-9a-f]{64}$"
     assert "signature_status" in artifact["required"]
+    assert "runtime_bundle_id" in schema["required"]
+    assert schema["properties"]["runtime_bundle_id"]["pattern"] == "^[0-9a-f]{64}$"
 
 
 def test_manifest_generator_uses_exact_tag_urls_hashes_and_installer_values():
@@ -24,6 +26,11 @@ def test_manifest_generator_uses_exact_tag_urls_hashes_and_installer_values():
         "SHA256SUMS-v$Version.txt",
         "generated-release-values.iss",
         "RuntimeVolumeCount",
+        "RuntimeBundleId",
+        "runtime_bundle_id",
+        "[Security.Cryptography.SHA256]::Create()",
+        "status --porcelain --untracked-files=all",
+        "$GitCommit = 'uncommitted'",
     ):
         assert required in script
 
@@ -37,3 +44,5 @@ def test_release_checksums_are_scoped_to_the_current_manifest_assets():
     assert "$ExpectedChecksumNames" in verifier
     assert "Compare-Object" in verifier
     assert "Duplicate checksum entry" in verifier
+    assert "Manifest.runtime_bundle_id" in verifier
+    assert "Runtime bundle identity verified" in verifier

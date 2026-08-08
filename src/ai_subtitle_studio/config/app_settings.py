@@ -30,9 +30,9 @@ class AppSettingsStore:
         else:
             self.backend = InMemorySettings()
     def load(self) -> AppSettings:
-        return AppSettings(selected_gpu_id=self._value("selected_gpu_id"), model_cache_dir=self._value("model_cache_dir"), ffmpeg_path=self._value("ffmpeg_path"), subtitle_edit_path=self._value("subtitle_edit_path"), default_output_dir=self._value("default_output_dir"), last_model_id=self._value("last_model_id", "large-v3") or "large-v3", last_translation_provider_id=self._value("last_translation_provider_id"))
+        return AppSettings(selected_gpu_id=self._value("selected_gpu_id"), model_cache_dir=self._value("model_cache_dir"), ffmpeg_path=self._value("ffmpeg_path"), subtitle_edit_path=self._value("subtitle_edit_path"), default_output_dir=self._value("default_output_dir"), last_model_id=self._value("last_model_id", "large-v3") or "large-v3", last_translation_provider_id=self._value("last_translation_provider_id"), last_compute_profile_id=self._value("last_compute_profile_id", "default") or "default")
     def save(self, settings: AppSettings) -> None:
-        for key in ("selected_gpu_id", "model_cache_dir", "ffmpeg_path", "subtitle_edit_path", "default_output_dir", "last_model_id", "last_translation_provider_id"):
+        for key in ("selected_gpu_id", "model_cache_dir", "ffmpeg_path", "subtitle_edit_path", "default_output_dir", "last_model_id", "last_translation_provider_id", "last_compute_profile_id"):
             self.backend.setValue(key, getattr(settings, key))
         self.backend.sync()
     def set_value(self, key: str, value: Any) -> None:

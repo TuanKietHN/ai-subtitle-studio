@@ -36,15 +36,46 @@ if ($BuildIdentity.app_version -ne $Version -or $RuntimePackage.app_version -ne 
     throw 'Release evidence version does not match the requested version.'
 }
 if (-not $GitCommit) {
-    $GitCommit = (& git -C $Root rev-parse HEAD 2>$null)
-    if ($LASTEXITCODE -ne 0 -or -not $GitCommit) {
+    $DirtyPaths = @(& git -C $Root status --porcelain --untracked-files=all 2>$null)
+    if ($LASTEXITCODE -ne 0 -or $DirtyPaths.Count -gt 0) {
         $GitCommit = 'uncommitted'
+    }
+    else {
+        $GitCommit = (& git -C $Root rev-parse HEAD 2>$null)
+        if ($LASTEXITCODE -ne 0 -or -not $GitCommit) {
+            $GitCommit = 'uncommitted'
+        }
     }
 }
 $GitCommit = $GitCommit.Trim()
 $Tag = "v$Version"
 $NumericVersion = "$($Version.Split('-')[0]).0"
 $BaseUrl = "https://github.com/$Owner/$Repository/releases/download/$Tag"
+$DependencyManifestSha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $DependencyManifestPath).Hash.ToLowerInvariant()
+$RuntimeIdentityLines = @(
+    "app_version=$Version",
+    "git_commit=$GitCommit",
+    "python_version=$($BuildIdentity.python_version)",
+    "platform=$($BuildIdentity.platform)",
+    "whisperx_version=$($BuildIdentity.whisperx_version)",
+    "torch_version=$($BuildIdentity.torch_version)",
+    "cuda_runtime_version=$($BuildIdentity.cuda_runtime_version)",
+    "pyinstaller_version=$($BuildIdentity.pyinstaller_version)",
+    "dependency_manifest_sha256=$DependencyManifestSha256"
+)
+$RuntimeVolumeIdentityIndex = 0
+foreach ($Volume in $RuntimePackage.volumes) {
+    $RuntimeVolumeIdentityIndex++
+    $RuntimeIdentityLines += "volume=$RuntimeVolumeIdentityIndex|$($Volume.name)|$($Volume.size_bytes)|$($Volume.sha256)"
+}
+$RuntimeIdentityBytes = [Text.Encoding]::UTF8.GetBytes([string]::Join("`n", $RuntimeIdentityLines))
+$RuntimeIdentityHasher = [Security.Cryptography.SHA256]::Create()
+try {
+    $RuntimeBundleId = ([BitConverter]::ToString($RuntimeIdentityHasher.ComputeHash($RuntimeIdentityBytes))).Replace('-', '').ToLowerInvariant()
+}
+finally {
+    $RuntimeIdentityHasher.Dispose()
+}
 $Artifacts = @()
 $VolumeIndex = 0
 foreach ($Volume in $RuntimePackage.volumes) {
@@ -110,7 +141,7 @@ $Manifest = [ordered]@{
         torch_version = $BuildIdentity.torch_version
         cuda_runtime_version = $BuildIdentity.cuda_runtime_version
         pyinstaller_version = $BuildIdentity.pyinstaller_version
-        dependency_manifest_sha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $DependencyManifestPath).Hash.ToLowerInvariant()
+        dependency_manifest_sha256 = $DependencyManifestSha256
     }
     channel = $Channel
     minimum_windows_version = '10'
@@ -118,6 +149,7 @@ $Manifest = [ordered]@{
     install_scope = 'current_user'
     installed_size_bytes = [int64]$RuntimePackage.installed_size_bytes
     temporary_space_bytes = [int64]($RuntimePackage.installed_size_bytes + $ArchiveBytes)
+    runtime_bundle_id = $RuntimeBundleId
     artifacts = $Artifacts
 }
 New-Item -ItemType Directory -Force $ReleaseDirectory | Out-Null
@@ -136,7 +168,8 @@ $Lines = @(
     "#define InstalledSizeBytes $($RuntimePackage.installed_size_bytes)",
     "#define TemporarySpaceBytes $($Manifest.temporary_space_bytes)",
     "#define ReleaseChannel `"$Channel`"",
-    "#define InstallerSignatureStatus `"$InstallerSignatureStatus`""
+    "#define InstallerSignatureStatus `"$InstallerSignatureStatus`"",
+    "#define RuntimeBundleId `"$RuntimeBundleId`""
 )
 $VolumeIndex = 0
 foreach ($Volume in $RuntimePackage.volumes) {

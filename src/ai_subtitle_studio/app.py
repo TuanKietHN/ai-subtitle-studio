@@ -11,6 +11,7 @@ import sys
 from typing import Callable
 
 from ai_subtitle_studio.config.app_settings import AppSettingsStore
+from ai_subtitle_studio.config.gpu_profiles import GpuProfileError, configured_execution_profile, resolve_execution_profile
 from ai_subtitle_studio.config.model_catalog import ModelCatalog
 from ai_subtitle_studio.config.system_info import SystemInfoProvider
 from ai_subtitle_studio.io.audio_extractor import AudioExtractor
@@ -29,6 +30,21 @@ from ai_subtitle_studio.ui.main_window import MainWindow, MainWindowController
 from ai_subtitle_studio.workers.job_runner import JobRunner
 
 ROOT = Path(__file__).resolve().parents[2]
+_APP_MUTEX_HANDLE = None
+
+
+def _register_running_app_mutex() -> None:
+    global _APP_MUTEX_HANDLE
+    if sys.platform != "win32" or _APP_MUTEX_HANDLE is not None:
+        return
+    try:
+        import ctypes
+
+        handle = ctypes.windll.kernel32.CreateMutexW(None, False, "AI-Subtitle-Studio-Runtime")
+        if handle:
+            _APP_MUTEX_HANDLE = handle
+    except Exception:
+        logging.getLogger(__name__).exception("Could not register the installer application mutex.")
 
 
 def _saved_path_outside_bundle(value: str | None, resource_root: Path) -> str | None:
@@ -89,6 +105,37 @@ def build_services(
     registry = TranslationProviderRegistry()
     registry.register(GoogleCloudTranslationProvider(credentials))
     registry.register(DeepSeekChatProvider(credentials))
+    system_info_provider = SystemInfoProvider(
+        ffmpeg_path=ffmpeg_path,
+        data_dir=app_paths.data_dir,
+        log_dir=app_paths.log_dir,
+    )
+    try:
+        effective_profile = configured_execution_profile(
+            requested_model_id=settings.last_model_id,
+            requested_profile_id=settings.last_compute_profile_id,
+        )
+    except GpuProfileError as exc:
+        logging.getLogger(__name__).warning("Invalid persisted GPU profile; using default: %s", exc)
+        effective_profile = configured_execution_profile(requested_model_id=settings.last_model_id)
+    try:
+        gpu_snapshot = system_info_provider.collect(
+            selected_model_id=settings.last_model_id,
+            selected_gpu_id=settings.selected_gpu_id,
+        )
+        ready_gpus = [gpu for gpu in gpu_snapshot.detected_gpus if gpu.torch_cuda_ready]
+        selected_gpu = next(
+            (gpu for gpu in ready_gpus if gpu.gpu_id == settings.selected_gpu_id),
+            ready_gpus[0] if ready_gpus else None,
+        )
+        if selected_gpu is not None:
+            effective_profile = resolve_execution_profile(
+                selected_gpu,
+                requested_model_id=settings.last_model_id,
+                requested_profile_id=settings.last_compute_profile_id,
+            )
+    except GpuProfileError as exc:
+        logging.getLogger(__name__).warning("GPU profile is not ready yet: %s", exc)
     runner = JobRunner(
         audio_extractor=AudioExtractor(ffmpeg_path),
         stt_engine=WhisperXEngine(),
@@ -100,11 +147,9 @@ def build_services(
         translation_registry=registry,
         model_cache_dir=app_paths.model_cache_dir,
         selected_gpu_id=settings.selected_gpu_id,
-    )
-    system_info_provider = SystemInfoProvider(
-        ffmpeg_path=ffmpeg_path,
-        data_dir=app_paths.data_dir,
-        log_dir=app_paths.log_dir,
+        compute_type=effective_profile.compute_type,
+        batch_size=effective_profile.batch_size,
+        execution_profile_id=effective_profile.profile_id,
     )
     controller = MainWindowController(
         model_catalog=catalog,
@@ -177,11 +222,30 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Validate packaged dependencies and service wiring without opening the UI.",
     )
+    parser.add_argument("--cleanup-private-data", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument("--cleanup-owned-outputs", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument("--cleanup-report", help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
-    paths = AppPaths.resolve()
+    cleanup_mode = args.cleanup_private_data or args.cleanup_owned_outputs
+    paths = AppPaths.resolve(create=not cleanup_mode)
+    if args.cleanup_private_data or args.cleanup_owned_outputs:
+        from ai_subtitle_studio.maintenance.cleanup_user_data import cleanup_user_data
+
+        settings = AppSettingsStore().load()
+        report = cleanup_user_data(
+            data_dir=paths.data_dir,
+            cleanup_private_data=args.cleanup_private_data,
+            cleanup_owned_outputs=args.cleanup_owned_outputs,
+            model_cache_dir=settings.model_cache_dir,
+        )
+        if args.cleanup_report:
+            Path(args.cleanup_report).write_text(report.to_json(), encoding="utf-8")
+        return 1 if report.failures else 0
     log_path = configure_logging(paths.log_dir, console=not getattr(sys, "frozen", False))
     if args.smoke_test:
         return run_smoke_test(paths)
+
+    _register_running_app_mutex()
 
     try:
         from PySide6.QtWidgets import QApplication  # type: ignore

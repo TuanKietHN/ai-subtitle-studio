@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Callable
 
 from ai_subtitle_studio.config.app_settings import AppSettingsStore, validate_existing_path
+from ai_subtitle_studio.config.gpu_profiles import DEFAULT_PROFILE_ID, LOW_VRAM_PROFILE_ID, GpuProfileError, resolve_execution_profile
 from ai_subtitle_studio.domain.entities import AppSettings
 from ai_subtitle_studio.io.working_files import WorkingFileManager
 
@@ -42,11 +43,13 @@ class SettingsController:
         credential_store=None,
         working_dir: str | Path | None = None,
         protected_job_ids: Callable[[], set[str]] | None = None,
+        system_info_provider=None,
     ) -> None:
         self.store = store
         self.credential_store = credential_store
         self.working_dir = Path(working_dir) if working_dir else None
         self.protected_job_ids = protected_job_ids or (lambda: set())
+        self.system_info_provider = system_info_provider
 
     def load(self) -> AppSettings:
         return self.store.load()
@@ -74,6 +77,33 @@ class SettingsController:
 
     def cleanup_temp_files(self) -> int:
         return self._working_files().cleanup_all(protected_job_ids=self.protected_job_ids())
+
+    def gpu_inventory(self):
+        if self.system_info_provider is None:
+            return []
+        return self.system_info_provider.collect().detected_gpus
+
+    def validate_gpu_profile(self, settings: AppSettings) -> str | None:
+        inventory = self.gpu_inventory()
+        selected = next(
+            (gpu for gpu in inventory if gpu.gpu_id == settings.selected_gpu_id),
+            inventory[0] if inventory else None,
+        )
+        if selected is None:
+            return (
+                "Không tìm thấy GPU NVIDIA/Torch CUDA để áp dụng profile 4 GiB."
+                if settings.last_compute_profile_id == LOW_VRAM_PROFILE_ID
+                else None
+            )
+        try:
+            result = resolve_execution_profile(
+                selected,
+                requested_model_id=settings.last_model_id,
+                requested_profile_id=settings.last_compute_profile_id,
+            )
+        except GpuProfileError as exc:
+            return str(exc)
+        return result.warning
 
     def _working_files(self) -> WorkingFileManager:
         if self.working_dir is not None:
@@ -116,6 +146,13 @@ if QT_AVAILABLE:
             self.gpu_combo = QComboBox()
             self.gpu_combo.addItem("Mặc định", "")
             layout.addRow("GPU", self.gpu_combo)
+            self.profile_combo = QComboBox()
+            self.profile_combo.addItem("Mặc định (float16)", DEFAULT_PROFILE_ID)
+            self.profile_combo.addItem("GPU 4 GiB (int8_float16, batch 1)", LOW_VRAM_PROFILE_ID)
+            layout.addRow("Profile GPU", self.profile_combo)
+            self.gpu_info_label = QLabel("Chưa đọc thông tin GPU")
+            self.gpu_info_label.setWordWrap(True)
+            layout.addRow("Khả năng", self.gpu_info_label)
             self.model_cache_edit = self._path_row(layout, "Thư mục model", directory=True)
             self.tabs.addTab(tab, "STT")
 
@@ -170,7 +207,21 @@ if QT_AVAILABLE:
 
         def _load_values(self) -> None:
             settings = self._settings
+            inventory = self.controller.gpu_inventory()
+            for gpu in inventory:
+                total_gib = gpu.total_vram_bytes / float(1024**3) if gpu.total_vram_bytes else 0.0
+                readiness = "Torch CUDA sẵn sàng" if gpu.torch_cuda_ready else "Torch CUDA lỗi"
+                self.gpu_combo.addItem(f"{gpu.gpu_id}: {gpu.name} ({total_gib:.1f} GiB, {readiness})", gpu.gpu_id)
             self._set_combo_data(self.gpu_combo, settings.selected_gpu_id or "")
+            self._set_combo_data(self.profile_combo, settings.last_compute_profile_id or DEFAULT_PROFILE_ID)
+            selected_gpu = next((gpu for gpu in inventory if gpu.gpu_id == settings.selected_gpu_id), inventory[0] if inventory else None)
+            if selected_gpu:
+                compute_types = ", ".join(selected_gpu.supported_compute_types) or "không đọc được"
+                self.gpu_info_label.setText(
+                    f"VRAM {selected_gpu.total_vram_bytes / float(1024**3):.1f} GiB; "
+                    f"compute capability {selected_gpu.compute_capability or '-'}; "
+                    f"CTranslate2: {compute_types}"
+                )
             self.model_cache_edit.setText(settings.model_cache_dir or "")
             self.ffmpeg_edit.setText(settings.ffmpeg_path or "")
             self.subtitle_edit_edit.setText(settings.subtitle_edit_path or "")
@@ -201,7 +252,28 @@ if QT_AVAILABLE:
                 default_output_dir=self.output_dir_edit.text().strip() or None,
                 last_model_id=self._settings.last_model_id or "large-v3",
                 last_translation_provider_id=self.provider_combo.currentData() or None,
+                last_compute_profile_id=self.profile_combo.currentData() or DEFAULT_PROFILE_ID,
             )
+            if settings.last_compute_profile_id == LOW_VRAM_PROFILE_ID and settings.last_model_id not in {"small.en", "small"}:
+                answer = QMessageBox.question(
+                    self,
+                    "Xác nhận đổi model",
+                    "Profile GPU 4 GiB cần model nhẹ. Đổi model đang chọn sang small.en?",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                )
+                if answer != QMessageBox.StandardButton.Yes:
+                    return
+                settings.last_model_id = "small.en"
+            profile_warning = self.controller.validate_gpu_profile(settings)
+            if profile_warning:
+                answer = QMessageBox.question(
+                    self,
+                    "Cảnh báo tương thích GPU",
+                    profile_warning + "\n\nBạn vẫn muốn lưu cấu hình này?",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                )
+                if answer != QMessageBox.StandardButton.Yes:
+                    return
             errors = {key: message for key, message in self.controller.validate_paths(settings).items() if message}
             if errors:
                 QMessageBox.warning(self, "Settings chưa hợp lệ", "\n".join(errors.values()))

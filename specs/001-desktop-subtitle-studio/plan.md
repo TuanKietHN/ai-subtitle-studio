@@ -1,8 +1,8 @@
 # Implementation Plan: Desktop Subtitle Studio Release Readiness
 
-**Branch**: `001-desktop-subtitle-studio` | **Updated**: 2026-07-30 | **Spec**: [spec.md](./spec.md) | **Target release**: `v0.1.0`
+**Branch**: `001-desktop-subtitle-studio` | **Updated**: 2026-08-08 | **Spec**: [spec.md](./spec.md) | **Next candidate**: `v0.1.0-rc.5` | **Stable target**: `v0.1.0`
 
-**Input**: Hoàn thiện ứng dụng hiện có, đưa source lên GitHub an toàn, đóng gói Windows, cung cấp installer dễ dùng và tự động hóa phát hành qua GitHub Releases.
+**Input**: Hoàn thiện ứng dụng hiện có, sửa lỗi kích hoạt runtime của RC4, tối ưu installer online/resume/uninstall, hỗ trợ cấu hình GPU NVIDIA 4 GiB như RTX 2050, và phát hành lại bằng RC mới qua GitHub Releases.
 
 ## Summary
 
@@ -10,17 +10,42 @@ Hoàn thiện AI Subtitle Studio từ trạng thái source/test chạy được 
 
 Do Torch CUDA tạo runtime nhiều gigabyte trong khi mỗi GitHub Release asset phải nhỏ hơn 2 GiB, artifact chính cho người dùng là một online installer nhỏ. Installer tải các archive runtime được chia dưới 1.9 GiB, kiểm SHA-256, giải nén vào thư mục cài đặt theo user, tạo shortcut và hỗ trợ uninstall/upgrade. Whisper model không nằm trong installer; app tải model ở lần sử dụng đầu.
 
-## Current Baseline
+RC4 đã chứng minh build/release asset hoạt động nhưng bộc lộ lỗi cài mới: `CurStepChanged(ssInstall)` chạy trước khi Inno Setup tạo `{app}`, trong khi mã đổi tên staging sang `{app}\runtime` mà chưa gọi `ForceDirectories({app})`. RC5 phải sửa lỗi này, chuyển staging sang cùng volume với thư mục cài, giữ archive đã tải để retry, hiển thị tiến độ thật, hỗ trợ local/cache/resume, và tách rõ cài mới với nâng cấp.
 
-- Source tree, service layer, PySide6 UI, persistence, worker queue và tests đã tồn tại.
-- Lần kiểm tra gần nhất ngày 2026-07-30: `86 passed` trên Python 3.13.7.
-- `whisperx==3.8.6`, Torch/TorchVision/TorchAudio `2.8.x` CUDA 12.8 đang chạy trong môi trường phát triển.
-- PyPI vẫn ghi nhận `3.8.6` là bản WhisperX stable mới nhất ngày 2026-07-30; `3.8.7rc1` là pre-release và không được dùng.
-- Thư mục `.git` đang tồn tại nhưng không có `HEAD`/`config`; repository chưa được khởi tạo hợp lệ.
-- PyInstaller spec hiện chỉ là scaffold: chưa thu thập import động WhisperX, chưa bundle `ffmpeg`, chưa có icon/version metadata/runtime hook.
-- `outputs/` có dữ liệu người dùng nhưng chưa được ignore.
-- App đang mặc định đặt SQLite/output/model cache dựa trên source/bundle root; model cache setting chưa được truyền vào `TranscriptionRequest`.
-- Chưa có GitHub workflows, installer, release manifest, checksum, third-party notices, code signing hoặc clean-machine validation.
+Ứng dụng hiện không khóa tên GPU cụ thể nhưng khóa `cuda + float16`, không đọc VRAM và model nhẹ nhất vẫn khuyến nghị 5 GiB. RC5 bổ sung profile 4 GiB theo cấu hình, model tiếng Anh nhỏ, `int8_float16`, batch nhỏ, giải phóng model giữa ASR/alignment và kiểm thử thật trên RTX 2050 hoặc GPU NVIDIA 4 GiB tương đương. `large-v3` vẫn là default theo constitution; máy 4 GiB được cảnh báo và có hành động một lần để chọn profile tương thích thay vì âm thầm đổi model.
+
+## RC4 Baseline Used for RC5 Planning
+
+- Repository đã được khởi tạo trên `main`, có `origin/main`, workflow CI/security/release và tag `v0.1.0-rc.4`.
+- Protected self-hosted Windows runner đã build RC4: installer khoảng 2.8 MiB, hai runtime volumes khoảng 1.8 GiB và 526 MiB, manifest, checksum, SBOM và notices.
+- RC4 setup log ngày 2026-08-01 xác nhận cả hai volume tải và verify SHA-256 thành công, giải nén thành công, rồi lỗi ở bước `RenameFile(StagedRuntime, ActiveRuntime)` vì `{app}` chưa tồn tại. Rollback xóa temporary download nên người dùng phải tải lại toàn bộ.
+- Installer hiện staging tại `{tmp}\runtime-staging`, tải từng volume tuần tự bằng `DownloadTemporaryFile`, chỉ đổi `StatusLabel`, không có tổng progress bar, persistent cache, `.part` resume, local-file reuse hoặc runtime identity để bỏ qua download khi nâng cấp.
+- Inno Setup hiện tạo Add/Remove Programs entry và uninstaller mặc định, nhưng Start Menu chưa có shortcut uninstall. `[UninstallDelete]` chỉ xóa binary runtime; model, log, SQLite, QSettings, Credential Manager và output được giữ lại nhưng chưa có lựa chọn full cleanup.
+- App phát hiện NVIDIA qua Torch và `nvidia-smi` nhưng fallback `nvidia-smi` có thể báo khả dụng khi Torch CUDA không khởi tạo được. System Info chưa đọc `memory.total`/compute capability và Settings chưa populate danh sách GPU thực tế.
+- `TranscriptionRequest` mặc định `compute_type="float16"`; `model.transcribe()` chưa nhận `batch_size`. ASR model còn sống khi alignment model được load, làm tăng peak VRAM.
+- Catalog chỉ có `medium` (5 GiB), `distil-large-v3` (6 GiB), `large-v3-turbo` (8 GiB) và default `large-v3` (10 GiB); chưa có profile được hỗ trợ cho GPU 4 GiB.
+- Automated/source/frozen validation và NVIDIA acceptance trên RTX 5060 8 GiB đã có bằng chứng trước RC4; clean install/upgrade/uninstall và NVIDIA 4 GiB vẫn chưa có bằng chứng release gate.
+
+## RC5 Implementation Status
+
+**Checked**: 2026-08-08
+
+- R3A-R3D source, contract tests and release tooling are implemented through
+  T163-T174. The automated suite passes 158 tests.
+- A local validation build produced the RC5 Setup, two runtime volumes,
+  manifest, checksums, SBOM and notices; frozen smoke and local release
+  verification passed.
+- The local validation manifest intentionally records
+  `git_commit=uncommitted`. Those assets are not publishable and MUST be rebuilt
+  after the source is committed and tag `v0.1.0-rc.5` points to that commit.
+- The current validation GPU is an RTX 5060 with 8,151 MiB VRAM, not a 4 GiB
+  acceptance device. Windows Sandbox is unavailable on this builder.
+- Google/DeepSeek test credentials are not present in the application keyring.
+  The RC5 installer is `NotSigned` as expected for a prerelease validation
+  build.
+- Therefore R5 clean-Windows, real 4 GiB, real-provider, SmartScreen/signing and
+  GitHub Settings/tag/draft-publication gates remain open. Source completion
+  MUST NOT be used as evidence that these external gates passed.
 
 ## Technical Context
 
@@ -40,7 +65,7 @@ Do Torch CUDA tạo runtime nhiều gigabyte trong khi mỗi GitHub Release asse
 
 - QSettings: tùy chọn không bí mật.
 - Windows Credential Manager/keyring: API key.
-- `%LOCALAPPDATA%\AI Subtitle Studio\data`: SQLite và state.
+- `%LOCALAPPDATA%\AI Subtitle Studio\ai_subtitle_studio.sqlite3`: SQLite và state hiện tại; migration phải giữ tương thích với đường dẫn đã phát hành.
 - `%LOCALAPPDATA%\AI Subtitle Studio\models`: model cache mặc định.
 - `%LOCALAPPDATA%\AI Subtitle Studio\logs`: rolling logs và crash diagnostics.
 - `%USERPROFILE%\Documents\AI Subtitle Studio\Outputs`: output mặc định.
@@ -59,9 +84,29 @@ Do Torch CUDA tạo runtime nhiều gigabyte trong khi mỗi GitHub Release asse
 
 - Inno Setup online installer x64, per-user, `PrivilegesRequired=lowest`.
 - Cài dưới `%LOCALAPPDATA%\Programs\AI Subtitle Studio`.
-- Tải archive từ GitHub Release qua HTTPS, kiểm SHA-256 bắt buộc trước khi giải nén.
+- Tạo `{app}` trước mọi rename; staging tại `{app}\runtime.staging` để staging, active và previous luôn cùng volume.
+- Nguồn runtime theo thứ tự: file cạnh Setup (`{src}`) -> verified persistent cache -> resumable BITS transfer -> Inno HTTPS fallback; mọi nguồn đều phải qua SHA-256 trước extraction.
+- Persistent cache mặc định `%LOCALAPPDATA%\AI Subtitle Studio\installer-cache\<runtime_bundle_id>`; cache hoàn chỉnh được giữ qua retry/nâng cấp, staging luôn bị dọn khi thất bại/hủy/uninstall.
+- Dùng `CreateDownloadPage` làm trang tiến độ và cập nhật tổng bytes, MiB/s, ETA, volume hiện tại và tiến độ toàn bundle. BITS dùng foreground priority vì người dùng đang chờ; nếu BITS/range/proxy không dùng được thì fallback tải Inno từ đầu với thông báo rõ ràng.
 - Tạo Start Menu shortcut, optional desktop shortcut, Add/Remove Programs entry và uninstaller.
-- Stable `AppId` để upgrade tại chỗ; không xóa dữ liệu người dùng khi uninstall trừ khi người dùng chủ động chọn.
+- Stable `AppId` để upgrade tại chỗ; runtime marker chứa `runtime_bundle_id` để bỏ qua download/extraction khi active runtime đúng cùng identity.
+- Uninstall mặc định chỉ xóa binary/shortcut/registration. Checkbox dữ liệu riêng mới được xóa model/cache/log/history/settings/API key; output có checkbox và xác nhận nguy hiểm riêng.
+
+**Low-VRAM GPU execution**:
+
+- GPU inventory đọc `index,name,driver_version,memory.total` bằng `nvidia-smi`, đối chiếu `torch.cuda.is_available()`, `torch.cuda.get_device_properties()` và compute types của CTranslate2.
+- `nvidia-smi` chỉ dùng cho diagnostics; STT preflight chỉ pass khi Torch CUDA khởi tạo được trên GPU đã chọn.
+- Catalog thêm `small.en` và `small` bằng dữ liệu cấu hình, không đổi default `large-v3`.
+- Profile 4 GiB: model đề xuất `small.en` cho video tiếng Anh, `compute_type=int8_float16` khi GPU hỗ trợ, `batch_size=1`, một GPU job duy nhất và không diarization.
+- Transcription request mang `compute_type` và `batch_size`; UI hiển thị profile/VRAM và yêu cầu người dùng xác nhận đổi khỏi model không tương thích, không âm thầm đổi kết quả.
+- Sau ASR phải xóa reference model, đồng bộ khi cần, `gc.collect()` và chỉ gọi `torch.cuda.empty_cache()` sau khi object sống đã được giải phóng; alignment model cũng được giải phóng sau dùng.
+- CUDA OOM được phân loại riêng. Hệ thống cleanup và retry tối đa một lần với batch nhỏ hơn/cùng model; nếu vẫn lỗi thì dừng rõ ràng và đề xuất model/profile nhẹ hơn, không loop vô hạn.
+
+**Uninstall ownership**:
+
+- Installer sở hữu `{app}`, `runtime`, `runtime.previous`, `runtime.staging`, shortcut và uninstall registration.
+- User-data mặc định không thuộc installer ownership. Full-clean chạy helper của app trước khi xóa runtime để xóa credential aliases qua keyring và QSettings chính xác.
+- Checkbox output luôn mặc định tắt, hiển thị đường dẫn chính xác và yêu cầu xác nhận thứ hai. Với custom output directory, chỉ xóa file do app ghi nhận sở hữu; không xóa source video hoặc toàn bộ thư mục tùy ý.
 
 **CI/CD**:
 
@@ -78,9 +123,12 @@ Do Torch CUDA tạo runtime nhiều gigabyte trong khi mỗi GitHub Release asse
 **Performance/UX Goals**:
 
 - UI responsive trong toàn bộ pipeline.
-- Installer hiển thị tổng dung lượng tải, tiến độ và lỗi mạng có thể retry.
+- Installer hiển thị tổng dung lượng, bytes đã tải, phần trăm tổng, tốc độ MiB/s, ETA, nguồn local/cache/network và lỗi mạng có thể retry/resume.
+- Hủy Setup trong lúc tải không làm mất phần `.part` hợp lệ; lỗi extraction/activation không buộc tải lại volume đã verify.
+- Nâng cấp cùng `runtime_bundle_id` không tải lại bundle 2.33 GiB.
 - App khởi động lần đầu không yêu cầu terminal hoặc Python cài sẵn.
 - App hiển thị thông báo rõ ràng nếu thiếu NVIDIA GPU/driver hoặc thiếu dung lượng cho model.
+- RTX 2050/GPU 4 GiB hoàn thành pipeline với low-VRAM profile mà không CUDA OOM trong bộ acceptance đã định nghĩa.
 - Startup smoke test của frozen app hoàn tất dưới 30 giây trên máy validation sau khi antivirus cache đã ổn định.
 
 **Security and Privacy**:
@@ -105,7 +153,9 @@ Do Torch CUDA tạo runtime nhiều gigabyte trong khi mỗi GitHub Release asse
 - **Worker execution**: PASS. Logging, model download, ffmpeg và installer không đưa công việc nặng lên Qt UI thread.
 - **Single GPU STT job**: PASS. Frozen/GPU manual test phải xác nhận GPU lock vẫn serialize STT.
 
-**Post-design re-check**: PASS. Release artifact contract, research addendum, data model và quickstart giữ nguyên toàn bộ invariant; G0 đã hoàn tất ngày 2026-07-30.
+Low-VRAM profiles không vi phạm constitution: chúng bổ sung model config-driven và runtime parameters cho phần cứng hạn chế, không đổi default `large-v3`, không expose VAD, không thêm CPU fallback và không chạy song song GPU STT.
+
+**Post-design re-check**: PASS. RC5 installer lifecycle, download/cache records, uninstall selection và GPU profiles giữ nguyên toàn bộ invariant. `vad_method="pyannote"` vẫn chỉ được đặt trong WhisperX wrapper; profile 4 GiB chỉ thay model/compute/batch đã được contract cho phép.
 
 ## Release Architecture
 
@@ -161,6 +211,7 @@ specs/001-desktop-subtitle-studio/
 ├── quickstart.md
 ├── contracts/
 │   ├── release-artifacts.md
+│   ├── gpu-execution-profiles.md
 │   └── ...existing contracts
 └── tasks.md
 ```
@@ -225,7 +276,7 @@ scripts/
 1. Cập nhật `.gitignore` cho `outputs/**`, `.env*`, installer staging, release archives, local signing files và generated manifests.
 2. Giữ `.gitkeep` nếu cần thư mục output rỗng; không commit các `.srt` hiện có.
 3. Chạy secret scan và rà history trước commit đầu tiên.
-4. Chọn trạng thái repository mặc định là **private**. Chỉ chuyển public sau khi chủ sở hữu chọn license nguồn và hoàn tất third-party notices.
+4. Repository hiện là **public** tại `TuanKietHN/ai-subtitle-studio` để người dùng tải online installer không cần đăng nhập. Vì chưa có `LICENSE`, tài liệu MUST nói rõ source chỉ đang hiển thị công khai và chưa cấp quyền sử dụng lại; chọn license nguồn vẫn là quyết định riêng của chủ sở hữu.
 5. Thêm README release-oriented, CHANGELOG, SECURITY, CONTRIBUTING và notices.
 6. Chuẩn hóa version về một source trong `pyproject.toml`; app, PyInstaller, installer, tag và manifest đọc cùng version.
 7. Khởi tạo Git bằng `git init -b main`, kiểm tra staged files, tạo initial commit sạch, rồi gắn remote GitHub.
@@ -276,24 +327,76 @@ scripts/
 - Không có model hoặc dữ liệu cá nhân trong bundle.
 - Runtime inventory không có file đơn lẻ vượt giới hạn phát hành.
 
-### Phase R3 — Installer and Large Runtime Delivery
+### Phase R3A — RC4 Activation Regression and Atomic Runtime Swap
 
-1. Đóng `onedir` thành multi-volume 7z, mục tiêu 1.8 GiB/volume.
-2. Sinh `release-manifest.json` và `SHA256SUMS.txt` từ đúng commit/build.
-3. Inno Setup installer lấy URL, size và SHA-256 từ generated include/manifest.
-4. Installer tải các volume qua HTTPS, kiểm checksum bắt buộc, retry khi mạng lỗi và hủy sạch file tạm.
-5. Cài per-user, tạo shortcut/uninstaller, giữ data/model/output khi upgrade/uninstall mặc định.
-6. Kiểm đủ dung lượng trước tải và trước giải nén.
-7. Sign `ai-subtitle-studio.exe`, installer và uninstaller; verify signature sau signing.
-8. Test fresh install, repair/reinstall, upgrade từ bản trước, uninstall và interrupted download.
+1. Khai báo rõ `ActiveRuntime := ExpandConstant('{app}\runtime')` và `PreviousRuntime := ExpandConstant('{app}\runtime.previous')`.
+2. Trước extraction/rename, bắt buộc:
 
-**Exit gate R3**:
+   ```pascal
+   if not ForceDirectories(ExpandConstant('{app}')) then
+     RaiseException('Không thể tạo thư mục cài đặt.');
+   ```
 
-- Người dùng chỉ cần tải `AI-Subtitle-Studio-Setup-v0.1.0.exe`.
-- Mọi runtime part < 1.9 GiB và có SHA-256.
-- Installer cài không cần admin và chạy app không cần Python hệ thống.
-- Corrupt/missing asset bị từ chối trước cài.
-- Upgrade giữ settings, credentials, database, model và output.
+3. Đặt `StageRoot := ExpandConstant('{app}\runtime.staging')`; xóa staging cũ an toàn rồi tạo lại. Không stage active payload dưới `{tmp}`.
+4. Dùng `PrepareToInstall`/Restart Manager với `RegisterExtraCloseApplicationsResource` hoặc app mutex để phát hiện app cũ đang chạy trước download/swap. Yêu cầu đóng app mềm; nếu không đóng được thì dừng trước khi thay file.
+5. Xác định `IsUpgrade := DirExists(ActiveRuntime)` trước mutation. Hiển thị “Đang cài mới” hoặc “Đang nâng cấp từ ...” và dùng thông báo lỗi/rollback đúng trường hợp, không nói “bản cũ được giữ lại” trong fresh install.
+6. Atomic swap cùng volume: active -> previous, staging -> active; nếu bước hai lỗi thì rollback previous -> active. Chỉ xóa previous sau executable/smoke check thành công.
+7. Dùng `try..finally`/deinitialize cleanup để dọn `runtime.staging` sau success, cancel và handled failure; thêm staging vào `[UninstallDelete]`.
+8. Thêm regression test cho `{app}` ban đầu không tồn tại và test upgrade khi app đang chạy.
+
+### Phase R3B — Resumable, Cached and Observable Runtime Delivery
+
+1. Sinh `runtime_bundle_id` deterministic từ ordered volume size/hash và build identity; ghi vào manifest, generated `.iss` include và marker trong active runtime.
+2. Resolve từng volume theo thứ tự tin cậy:
+   - `{src}\<volume>` nếu người dùng tải sẵn cạnh Setup và SHA-256 đúng;
+   - persistent installer cache nếu file hoàn chỉnh/hash đúng;
+   - `.part` cache + BITS job cùng bundle identity để resume;
+   - HTTPS fallback bằng Inno nếu BITS không khả dụng.
+3. Không bao giờ dùng file chỉ vì trùng tên/kích thước. SHA-256 đúng mới được promote `.part` -> final cache và đưa vào extraction.
+4. Dùng `CreateDownloadPage`; callback/state tổng hợp phải hiển thị volume N/T, tổng MiB đã tải/tổng MiB, phần trăm tổng, moving-average MiB/s và ETA. Tiến độ không reset về 0 khi chuyển `.001` sang `.002`.
+5. BITS chạy foreground priority cho interactive install, lưu job id để cancel/resume và kiểm HTTP range/proxy. Nếu lỗi không hỗ trợ thì fallback có thông báo; không hạ integrity gate.
+6. Cancel/mất mạng giữ `.part` và metadata cùng bundle id. Corrupt, sai hash, sai bundle id hoặc quá hạn retention bị xóa; verified complete cache được giữ để retry extraction/activation.
+7. Nếu active marker có cùng `runtime_bundle_id`, skip runtime download/extraction và chỉ chạy phần installer metadata/shortcut cần thiết. Nếu marker thiếu hoặc mismatch, fail-safe bằng full verified install.
+8. Kiểm dung lượng riêng cho download cache, staging, active, previous và rollback; không dùng một con số tạm thời gây thiếu disk giữa swap.
+9. Thêm contract tests cho local-file reuse, complete-cache reuse, interrupted `.part` resume, BITS fallback, aggregate progress/ETA, wrong hash, activation retry không redownload và same-runtime upgrade skip.
+
+### Phase R3C — Uninstall UX and Selective Data Cleanup
+
+1. Thêm Start Menu shortcut “Gỡ cài đặt AI Subtitle Studio” trỏ tới `{uninstallexe}`.
+2. Uninstall mặc định xóa binary, staging/previous, shortcut và registration nhưng giữ database, model, log, settings, credentials, installer cache và output.
+3. Tạo checkbox mặc định tắt: **“Xóa model, cache, log, lịch sử và API key”**. Khi chọn, cleanup helper phải xóa model/cache/log/SQLite, QSettings registry và credential aliases qua keyring trước khi runtime bị xóa.
+4. Tạo checkbox riêng mặc định tắt: **“Xóa phụ đề/output đã tạo”**. Hiển thị đường dẫn, số file/dung lượng và hộp xác nhận nguy hiểm thứ hai; không gộp với checkbox dữ liệu.
+5. Với custom output directory, chỉ xóa file output do ứng dụng ghi nhận; không recursive-delete thư mục tùy ý và không bao giờ xóa video nguồn.
+6. Nếu cleanup credential/settings thất bại, uninstaller ghi log và báo phần dữ liệu còn lại; không tuyên bố full cleanup thành công sai sự thật.
+7. Test bốn ma trận: default preserve; data cleanup only; output cleanup only; full cleanup. Lặp lại với custom model/output paths và app đang chạy.
+
+**Exit gate R3A-R3C**:
+
+- Fresh install pass khi `{app}` chưa tồn tại; không còn lỗi activation RC4.
+- Staging/active/previous luôn cùng volume và rollback giữ được active runtime cũ.
+- Người dùng chỉ cần Setup; local/cache/resume hoạt động và mọi nguồn đều được hash verify.
+- Retry extraction/activation không tải lại 2.33 GiB đã verify; same-runtime upgrade tải 0 byte runtime.
+- Progress tổng, tốc độ và ETA được quan sát trên clean Windows.
+- Uninstall mặc định không mất dữ liệu; hai lựa chọn cleanup hoạt động độc lập và output có double confirmation.
+
+### Phase R3D — NVIDIA 4 GiB / RTX 2050 Execution Profile
+
+1. Mở rộng GPU detection với total/free VRAM, compute capability, driver và Torch CUDA readiness. Populate GPU selector bằng inventory thực tế.
+2. Loại fallback “`nvidia-smi` chạy được nghĩa là STT dùng được”; `torch.cuda.is_available()` và device initialization mới là preflight gate.
+3. Mở rộng `models.json` bằng `small.en` và `small`, giữ đúng một default `large-v3`, thêm metadata VRAM/profile config-driven và validation tests.
+4. Thêm `GpuExecutionProfile`/resolver. Profile 4 GiB dùng `small.en`, `int8_float16` nếu CTranslate2 báo hỗ trợ, `batch_size=1`; không diarization và vẫn giữ Pyannote VAD bắt buộc.
+5. Truyền `batch_size` thật vào `model.transcribe()`; không chỉ lưu trong settings. Ghi effective model/compute/batch/GPU/VRAM vào log chẩn đoán không bí mật.
+6. Kết thúc ASR phải giải phóng model trước khi load alignment; kết thúc alignment cũng giải phóng model/tensor. Đo peak allocated/reserved memory trong acceptance.
+7. Chuẩn hóa CUDA OOM thành error code riêng; cleanup và retry tối đa một lần với batch 1/cùng model. Chuyển model chỉ sau xác nhận của người dùng.
+8. UI đánh dấu model “phù hợp”, “có thể thiếu VRAM”, “không khuyến nghị”; lần đầu trên 4 GiB hiển thị một-click chọn profile nhẹ nhưng không thay default constitution trong config.
+9. Unit/contract tests mock 4 GiB/8 GiB, compute-type support, OOM retry và model cleanup. Manual release gate chạy RTX 2050 4 GiB hoặc GPU NVIDIA 4 GiB tương đương với ít nhất hai MP4.
+
+**Exit gate R3D**:
+
+- GPU 4 GiB được nhận đúng tên/VRAM và không bị khóa theo GPU nhà phát triển.
+- Low-VRAM profile chạy hết ASR + alignment + SRT trên hai video mà không OOM.
+- Peak VRAM và effective profile được ghi nhận; UI vẫn responsive và GPU lock vẫn serialize job.
+- `large-v3` vẫn là default; VAD vẫn hard-coded `pyannote`; không có CPU fallback ngoài phạm vi.
 
 ### Phase R4 — GitHub CI/CD and Repository Controls
 
@@ -308,6 +411,7 @@ scripts/
 8. Tải toàn bộ asset từ draft Release bằng trình duyệt và verify local trước
    publish.
 9. Không cấp write token hoặc signing secret cho pull request jobs.
+10. Release verifier bắt buộc kiểm `runtime_bundle_id`, cache marker schema, RC5 asset URL/hash và không cho publish nếu installer contract tests R3A-R3D chưa pass.
 
 **Exit gate R4**:
 
@@ -320,12 +424,12 @@ scripts/
 ### Phase R5 — Product Acceptance and Public Release
 
 1. Clean Windows 10/11 x64 install test.
-2. NVIDIA GPU test với ít nhất hai `.mp4`: download model, queue tuần tự, cancel/retry/recovery, English SRT.
+2. NVIDIA 8 GiB regression test và NVIDIA 4 GiB/RTX 2050 acceptance với ít nhất hai `.mp4`: profile selection, download model, queue tuần tự, cancel/retry/recovery, English SRT và peak VRAM.
 3. Google và DeepSeek test bằng credential test riêng, không đưa key vào log.
 4. Vietnamese/bilingual edit/export test.
 5. No-GPU behavior test.
 6. Subtitle Edit integration test nếu executable được cấu hình.
-7. Antivirus/SmartScreen/signature observation và installer download retry test.
+7. Antivirus/SmartScreen/signature observation; fresh-install missing `{app}`, app-running upgrade, local/cache/BITS resume, activation retry và same-runtime no-download tests.
 8. Review release notes: prerequisites, download size, disk size, first-model download, known issues, privacy, uninstall.
 9. Publish pre-release nếu chưa ký số hoặc còn known issue không chặn; chỉ đánh dấu stable/latest khi mọi stable gate pass.
 
@@ -335,6 +439,8 @@ scripts/
 - 86+ automated tests pass và test mới cho release correctness pass.
 - Source repo sạch, không có secret/dữ liệu người dùng/binary lớn.
 - Installer một-click cài thành công trên clean Windows.
+- Installer RC5 không tái hiện activation bug RC4; download/cache/resume/upgrade/uninstall matrix pass.
+- GPU NVIDIA 4 GiB hoàn thành low-VRAM acceptance profile mà không CUDA OOM.
 - GPU STT, translation, edit, export, persistence và recovery pass manual acceptance.
 - Installer/app được ký số cho stable release.
 - GitHub Release có installer, runtime parts, SHA256, manifest, SBOM/notices và release notes.
@@ -343,16 +449,23 @@ scripts/
 
 ## Git and GitHub Publication Sequence
 
-1. Hoàn thành R0-R2 trên local branch.
-2. Khởi tạo repository và commit source-only.
-3. Tạo GitHub repository private, thêm remote và push `main`.
-4. Bật Actions/branch protection/secrets/environment.
-5. Merge release tooling qua pull request đã pass CI.
-6. Tạo tag annotated `v0.1.0-rc.1`; workflow tạo verified bundle, sau đó chủ sở
-   hữu tạo draft/pre-release bằng giao diện web.
-7. Hoàn tất R3-R5 trên release candidate.
-8. Sửa lỗi bằng commit/tag RC mới; không thay asset của tag cũ.
-9. Khi stable gates pass, tạo tag `v0.1.0`, publish release và cập nhật README latest-download link.
+Các bước khởi tạo repository, CI, release tooling và các tag RC1-RC4 đã hoàn
+thành trước addendum này. Từ trạng thái hiện tại:
+
+1. Giữ nguyên tag/asset RC1-RC4 để audit; đánh dấu RC4 có known installer
+   activation issue và không upload đè asset cũ.
+2. Thực hiện R3A-R3D trên branch tính năng, bổ sung test tự động và review diff.
+3. Chạy R4 cùng source/frozen/release verifier trên protected Windows runner.
+4. Merge commit đã pass CI vào `main`; xác nhận working tree sạch và commit đích
+   chính xác trước khi tag.
+5. Tạo annotated tag mới `v0.1.0-rc.5` trên commit đã xác nhận; không di chuyển
+   hoặc tái sử dụng tag RC4.
+6. Workflow tạo verified RC5 bundle; chủ sở hữu tải artifact, tạo draft
+   pre-release bằng giao diện GitHub và upload đúng các asset version-scoped.
+7. Tải lại asset RC5 bằng trình duyệt, chạy `verify-release.ps1`, rồi hoàn tất
+   clean-VM installer matrix và GPU 4 GiB acceptance trong R5.
+8. Chỉ publish RC5 pre-release khi mọi RC gate pass. Khi stable gates gồm ký số
+   pass, tạo tag `v0.1.0`, publish stable và cập nhật README latest-download.
 
 ## Versioning, Rollback and Artifact Policy
 
@@ -378,7 +491,14 @@ scripts/
 | API key lọt log/repo | Security incident | Keyring + redaction tests + secret scan | R0/R1/R4 |
 | Model cache setting không có tác dụng | Tải model sai nơi, đầy disk | Propagate into request + integration test | R1 |
 | Release asset bị hỏng/đổi | Cài đặt lỗi hoặc supply-chain risk | SHA-256, signature, immutable tag/assets | R3/R4 |
-| Public repo chưa có license | Quyền sử dụng source không rõ | Private-by-default; public gate cần owner license decision | R0 |
+| Public repo chưa có license | Người xem có thể hiểu nhầm source đã là open source hoặc được phép tái sử dụng | README/docs nói rõ chưa có license; không tự gán license và yêu cầu owner decision trước khi quảng bá quyền tái sử dụng | R0 |
+| `{app}` chưa tồn tại trước atomic swap | Fresh install luôn lỗi sau khi tải 2.33 GiB | `ForceDirectories({app})` + missing-dir regression test | R3A |
+| Staging ở `{tmp}` khác volume | `RenameFile` không atomic hoặc thất bại | Stage tại `{app}\runtime.staging` | R3A |
+| Mạng ngắt làm tải lại toàn bundle | Trải nghiệm cài đặt kém, tốn băng thông | Persistent `.part`, BITS resume, local/cache reuse | R3B |
+| BITS bị proxy/range policy chặn | Installer không tiến triển | Capability check + Inno HTTPS fallback + actionable error | R3B |
+| Full cleanup xóa nhầm output/video | Mất dữ liệu người dùng | Default preserve, separate checkbox, exact path, double confirmation, owned-file list | R3C |
+| GPU 4 GiB dùng float16/model lớn | CUDA OOM ở ASR hoặc alignment | small.en + int8_float16 + batch 1 + phase cleanup + real 4 GiB gate | R3D |
+| `nvidia-smi` có nhưng Torch CUDA lỗi | False-positive GPU support | Torch device initialization là gate, nvidia-smi chỉ diagnostics | R3D |
 
 ## Complexity Tracking
 
@@ -388,5 +508,8 @@ scripts/
 | Online installer + runtime volumes | GitHub giới hạn mỗi asset dưới 2 GiB nhưng Torch CUDA lớn hơn | Commit binary/Git LFS hoặc yêu cầu người dùng ghép file thủ công |
 | Self-hosted release runner | Full CUDA build cần disk lớn và môi trường kiểm soát | Build full trên mọi PR/hosted runner tốn thời gian và dễ hết disk |
 | Separate light CI dependencies | Tests phần lớn dùng mocks/contracts | Tải Torch CUDA nhiều GB cho mỗi PR không tạo thêm tín hiệu tương xứng |
+| BITS + persistent installer cache | Native Inno downloader không có persistent partial resume | Tải lại 2.33 GiB sau lỗi không đạt yêu cầu UX |
+| Config-driven GPU execution profiles | Một cấu hình float16 không phù hợp mọi VRAM | Hard-code riêng RTX 2050 sẽ khóa phần cứng và khó mở rộng |
+| Selective uninstall cleanup helper | Credential Manager/QSettings không thể xóa chỉ bằng `[UninstallDelete]` | Giữ tất cả hoặc xóa đệ quy toàn bộ đều không đáp ứng quyền kiểm soát dữ liệu |
 
 Không có vi phạm constitution. Độ phức tạp bổ sung chỉ nằm ở delivery toolchain và được yêu cầu trực tiếp bởi kích thước runtime, giới hạn GitHub và trải nghiệm cài đặt không dùng dòng lệnh.

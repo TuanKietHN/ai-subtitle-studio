@@ -15,7 +15,7 @@ from ai_subtitle_studio.io.audio_extractor import AudioExtractionCanceled
 from ai_subtitle_studio.io.srt_writer import SRTWriter, default_output_paths
 from ai_subtitle_studio.io.working_files import WorkingFileManager
 from ai_subtitle_studio.persistence.repositories import source_fingerprint
-from ai_subtitle_studio.stt.base import GpuUnavailableError, TranscriptionCanceled, TranscriptionRequest
+from ai_subtitle_studio.stt.base import GpuOutOfMemoryError, GpuUnavailableError, TranscriptionCanceled, TranscriptionRequest
 from ai_subtitle_studio.translation.base import TranslationBatchRequest, TranslationItem, validate_translation_shape
 from ai_subtitle_studio.workers.worker_events import WorkerControlToken, WorkerEvent, error_event, pause_pending_event, progress_event
 
@@ -154,6 +154,9 @@ class JobRunner:
         working_files: WorkingFileManager | None = None,
         model_cache_dir: str | Path | None = None,
         selected_gpu_id: str | None = None,
+        compute_type: str = "float16",
+        batch_size: int = 16,
+        execution_profile_id: str = "default",
     ) -> None:
         self.audio_extractor = audio_extractor
         self.stt_engine = stt_engine
@@ -168,6 +171,9 @@ class JobRunner:
         self.translation_registry = translation_registry
         self.model_cache_dir = Path(model_cache_dir) if model_cache_dir else None
         self.selected_gpu_id = selected_gpu_id
+        self.compute_type = compute_type
+        self.batch_size = batch_size
+        self.execution_profile_id = execution_profile_id
         self.events: list[WorkerEvent] = []
         self.current_job_id: str | None = None
 
@@ -181,9 +187,20 @@ class JobRunner:
         *,
         model_cache_dir: str | Path | None = None,
         selected_gpu_id: str | None = None,
+        compute_type: str | None = None,
+        batch_size: int | None = None,
+        execution_profile_id: str | None = None,
     ) -> None:
         self.model_cache_dir = Path(model_cache_dir) if model_cache_dir else None
         self.selected_gpu_id = selected_gpu_id
+        if compute_type is not None:
+            self.compute_type = compute_type
+        if batch_size is not None:
+            if batch_size < 1:
+                raise ValueError("batch_size must be positive")
+            self.batch_size = batch_size
+        if execution_profile_id is not None:
+            self.execution_profile_id = execution_profile_id
 
     def emit(self, event: WorkerEvent) -> None:
         self.events.append(event)
@@ -235,6 +252,9 @@ class JobRunner:
                 model_id=job.selected_model_id,
                 model_cache_dir=str(self.model_cache_dir) if self.model_cache_dir else None,
                 gpu_id=job.gpu_id or self.selected_gpu_id,
+                compute_type=self.compute_type,
+                batch_size=self.batch_size,
+                execution_profile_id=self.execution_profile_id,
             )
             result = self.stt_engine.transcribe(
                 request,
@@ -276,7 +296,13 @@ class JobRunner:
         except Exception as exc:
             logger.exception("Worker job %s failed while status=%s.", job.id, job.status.value)
             if job.status is not JobStatus.CANCELED:
-                info = user_safe_error("gpu" if isinstance(exc, GpuUnavailableError) else "stt", str(exc))
+                if isinstance(exc, GpuOutOfMemoryError):
+                    error_code = "gpu_out_of_memory"
+                elif isinstance(exc, GpuUnavailableError):
+                    error_code = "gpu"
+                else:
+                    error_code = "stt"
+                info = user_safe_error(error_code, str(exc))
                 job.status = JobStatus.FAILED
                 job.error_code = info.code
                 job.error_message = info.message

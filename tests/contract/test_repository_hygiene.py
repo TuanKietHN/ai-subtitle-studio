@@ -44,5 +44,7 @@ def test_version_has_one_literal_source():
 
 def test_public_repository_requires_owner_license_decision():
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
-    assert "private" in readme.lower()
-    assert "license" in readme.lower()
+    normalized = readme.lower()
+    assert "repository hiện được công khai" in normalized
+    assert "chưa có file `license`" in normalized
+    assert "không được mặc định hiểu là open source" in normalized

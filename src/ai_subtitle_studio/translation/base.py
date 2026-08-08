@@ -72,8 +72,8 @@ class KeyringCredentialStore(CredentialStore):
         if self._keyring is None:
             self._memory.pop(alias, None)
         else:
-            try: self._keyring.delete_password(self.service_name, alias)
-            except Exception: pass
+            if self._keyring.get_password(self.service_name, alias) is not None:
+                self._keyring.delete_password(self.service_name, alias)
 
 def validate_translation_shape(request: TranslationBatchRequest, result: TranslationBatchResult) -> None:
     expected = [item.sequence_number for item in request.items]

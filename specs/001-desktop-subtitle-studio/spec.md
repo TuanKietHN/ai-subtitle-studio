@@ -4,6 +4,8 @@
 
 **Created**: 2026-07-08
 
+**Updated**: 2026-08-08
+
 **Status**: Draft
 
 **Input**: User description: "Xây dựng ứng dụng desktop Windows cho người dùng cá nhân có GPU NVIDIA tạo phụ đề tiếng Anh từ video bài giảng, dịch sang tiếng Việt, chỉnh sửa, quản lý model, xử lý hàng đợi tuần tự và mở kết quả bằng Subtitle Edit."
@@ -17,6 +19,13 @@
 - Q: API key dịch nên được lưu an toàn như thế nào? → A: Lưu API key bằng Windows Credential Manager hoặc kho bí mật hệ điều hành tương đương.
 - Q: Khi đóng và mở lại ứng dụng, hàng đợi xử lý nên được khôi phục thế nào? → A: Persist hàng đợi, cấu hình job và kết quả đã có; job đang chạy khi app đóng được đánh dấu cần chạy lại.
 - Q: Khi người dùng tạm dừng job chưa chạy hoặc job đang chạy thì ứng dụng phải phản hồi thế nào? → A: Job chưa chạy tạm dừng ngay; job đang chạy hiển thị trạng thái chờ checkpoint an toàn cho đến khi bước hiện tại kết thúc.
+
+### Session 2026-08-08
+
+- Q: Người dùng cuối phải chuẩn bị môi trường chạy như thế nào? → A: Người dùng chỉ mở một file Setup; ứng dụng tự cài runtime cần thiết và không yêu cầu cài Python, FFmpeg hoặc công cụ giải nén riêng.
+- Q: Nếu mạng ngắt giữa lúc tải runtime thì sao? → A: Setup giữ phần tải hợp lệ, tiếp tục từ dữ liệu đã có khi chạy lại và chỉ dùng file vượt qua kiểm tra toàn vẹn.
+- Q: Gỡ ứng dụng có xóa model, lịch sử, API key và phụ đề không? → A: Mặc định giữ dữ liệu; xóa dữ liệu riêng và xóa output là hai lựa chọn tắt sẵn, độc lập và cần xác nhận rõ ràng.
+- Q: Máy NVIDIA 4 GiB như RTX 2050 có bị khóa theo tên GPU không? → A: Không; khả năng chạy được quyết định từ GPU thực tế, VRAM và kiểu tính toán hỗ trợ. Người dùng chủ động xác nhận profile nhẹ, còn `large-v3` vẫn là mặc định.
 
 
 ## User Scenarios & Testing *(mandatory)*
@@ -99,6 +108,26 @@ Người dùng cấu hình GPU, đường dẫn lưu model, đường dẫn Subt
 2. **Given** đường dẫn Subtitle Edit hợp lệ, **When** người dùng bấm "Mở bằng Subtitle Edit" sau khi xuất phụ đề, **Then** file phụ đề vừa tạo được mở bằng ứng dụng đó.
 3. **Given** người dùng mở "Thông tin hệ thống / About", **When** màn hình hiển thị, **Then** người dùng thấy phiên bản WhisperX, faster-whisper, CUDA/GPU, model đang chọn, dung lượng model đã tải và phiên bản ứng dụng.
 
+---
+
+### User Story 6 - Cài đặt, nâng cấp, gỡ ứng dụng và dùng GPU 4 GiB (Priority: P1)
+
+Người dùng Windows tải một file Setup nhỏ, để Setup tự lấy đúng runtime rồi mở ứng dụng mà không phải cài môi trường lập trình. Nếu mạng gián đoạn, lần chạy sau tiếp tục phần tải hợp lệ. Khi nâng cấp hoặc gỡ ứng dụng, dữ liệu cá nhân được bảo vệ theo lựa chọn rõ ràng. Người dùng có GPU NVIDIA khoảng 4 GiB được nhận diện theo khả năng thực tế và có thể chủ động chọn profile nhẹ phù hợp.
+
+**Why this priority**: Đây là cửa vào của toàn bộ sản phẩm. Ứng dụng dù hoạt động đúng trong môi trường phát triển vẫn không dùng được với người dùng phổ thông nếu cài đặt phải dùng dòng lệnh, tải lại nhiều gigabyte sau lỗi, xóa nhầm dữ liệu hoặc không hỗ trợ GPU phổ biến 4 GiB.
+
+**Independent Test**: Trên một máy Windows sạch, chỉ dùng Setup để cài và mở ứng dụng; ngắt rồi tiếp tục tải; thử nâng cấp và bốn lựa chọn gỡ; sau đó trên GPU NVIDIA 4 GiB, xác nhận profile nhẹ và xử lý tuần tự hai video tiếng Anh thành SRT mà không cần sửa code hay tên GPU.
+
+**Acceptance Scenarios**:
+
+1. **Given** máy Windows sạch không có Python, FFmpeg hoặc công cụ giải nén do người dùng cài, **When** người dùng chạy một file Setup và hoàn tất hướng dẫn, **Then** ứng dụng được cài, có shortcut chạy/gỡ và mở được không cần dòng lệnh hay quyền quản trị.
+2. **Given** tải runtime bị mất mạng hoặc người dùng đóng Setup giữa chừng, **When** người dùng chạy lại đúng phiên bản Setup, **Then** phần tải hợp lệ được tiếp tục hoặc tái sử dụng thay vì tải lại toàn bộ và mọi phần đều được kiểm tra toàn vẹn trước khi cài.
+3. **Given** một phiên bản ứng dụng cũ đang hoạt động, **When** cài bản nâng cấp bị lỗi ở bước kích hoạt, **Then** bản cũ vẫn dùng được; nếu là cài mới thất bại thì không có runtime chưa hoàn chỉnh bị coi là đã cài thành công.
+4. **Given** người dùng gỡ ứng dụng mà không chọn tùy chọn xóa thêm, **When** quá trình gỡ hoàn tất, **Then** binary và shortcut bị xóa nhưng model, cache tải, log, lịch sử, settings, API key và output được giữ lại.
+5. **Given** người dùng muốn xóa dữ liệu riêng hoặc output, **When** người dùng chọn từng lựa chọn độc lập và xác nhận phạm vi hiển thị, **Then** chỉ dữ liệu thuộc phạm vi đã xác nhận bị xóa và video nguồn hoặc file không do ứng dụng sở hữu không bị ảnh hưởng.
+6. **Given** máy có GPU NVIDIA khoảng 4 GiB, **When** người dùng xem chẩn đoán và xác nhận profile nhẹ được đề xuất, **Then** ứng dụng dùng đúng GPU/profile đã chọn, vẫn giữ `large-v3` là mặc định chung và không có nhánh xử lý phụ thuộc vào tên như `RTX 2050`.
+7. **Given** một job dùng profile 4 GiB gặp thiếu bộ nhớ GPU, **When** cơ chế phục hồi tự động đã thử tối đa một lần mà vẫn thất bại, **Then** job dừng với lỗi rõ ràng và khuyến nghị có thể hành động, còn ứng dụng và các job khác vẫn nguyên vẹn.
+
 ### Edge Cases
 
 - File được chọn không phải `.mp4`, bị hỏng, không đọc được hoặc không có audio.
@@ -114,6 +143,13 @@ Người dùng cấu hình GPU, đường dẫn lưu model, đường dẫn Subt
 - File output đã tồn tại trong thư mục đích.
 - Subtitle Edit chưa cài, đường dẫn cấu hình sai hoặc file phụ đề chưa được tạo.
 - Ứng dụng bị đóng khi còn job đang chờ hoặc đang xử lý.
+- Mạng ngắt, máy ngủ hoặc Setup bị đóng khi một phần runtime mới tải được một phần.
+- File runtime cạnh Setup hoặc trong cache trùng tên nhưng sai kích thước, sai checksum hoặc thuộc bản phát hành khác.
+- Setup được chạy lại khi runtime đang cài có cùng nội dung hoặc khi ứng dụng cũ vẫn đang mở.
+- Kích hoạt runtime mới thất bại sau khi đã lưu runtime cũ để rollback.
+- Người dùng chọn xóa output trong một thư mục tùy chỉnh có cả video nguồn và file không do ứng dụng tạo.
+- GPU báo được tên qua công cụ chẩn đoán nhưng runtime CUDA không thể khởi tạo trên GPU đã chọn.
+- GPU 4 GiB không hỗ trợ kiểu tính toán ưu tiên, hoặc vẫn hết VRAM sau lần retry duy nhất.
 
 ## Requirements *(mandatory)*
 
@@ -179,6 +215,20 @@ Feature này chạm đến STT, translation, model selection, System Info, worke
 - **FR-046**: Hệ thống MUST khôi phục hàng đợi, cấu hình từng job và các kết quả đã tạo sau khi đóng rồi mở lại ứng dụng.
 - **FR-047**: Nếu ứng dụng đóng khi job đang chạy, job đó MUST được khôi phục ở trạng thái cần chạy lại và MUST không được đánh dấu thành công dựa trên kết quả chưa hoàn tất.
 - **FR-048**: Hệ thống MUST hiển thị rõ khi yêu cầu tạm dừng job đang chạy đang chờ checkpoint an toàn, thay vì báo rằng job đã tạm dừng ngay lập tức.
+- **FR-049**: Người dùng MUST có thể cài và mở ứng dụng từ một file Setup mà không phải cài Python, FFmpeg, công cụ giải nén, dùng dòng lệnh hoặc cấp quyền quản trị cho luồng cài đặt thông thường.
+- **FR-050**: Setup MUST chỉ lấy các phần runtime thuộc đúng phiên bản phát hành từ file cạnh Setup, cache đã xác minh hoặc mạng; mọi phần MUST vượt qua kiểm tra kích thước và SHA-256 trước khi được dùng.
+- **FR-051**: Trong lúc lấy runtime, Setup MUST hiển thị phần hiện tại, tiến độ tổng toàn bộ bundle, dung lượng đã tải/tổng dung lượng, tốc độ và thời gian còn lại ước tính mà không đặt lại tiến độ tổng khi chuyển phần.
+- **FR-052**: Khi tải bị hủy hoặc gián đoạn, Setup MUST giữ dữ liệu tải một phần còn hợp lệ và dùng cơ chế truyền tiếp tục được của Windows để tiếp tục ở lần chạy sau; nếu cơ chế đó không khả dụng, Setup MUST giải thích việc chuyển sang kênh HTTPS thay thế.
+- **FR-053**: Setup MUST tạo và kiểm tra runtime mới ở vùng staging cùng ổ đĩa, chỉ kích hoạt sau khi xác minh đầy đủ, khôi phục runtime cũ nếu nâng cấp thất bại và không để runtime cài dở trở thành bản hoạt động.
+- **FR-054**: Setup MUST phân biệt cài mới, sửa chữa và nâng cấp; MUST dừng an toàn nếu ứng dụng cũ chưa đóng; và MUST bỏ qua tải/giải nén runtime khi bằng chứng nhận dạng cho thấy runtime đang hoạt động giống hệt runtime sắp cài.
+- **FR-055**: Ứng dụng MUST có lối gỡ trong Start Menu và mục Apps/Installed Apps của Windows; gỡ mặc định MUST xóa binary, staging, runtime dự phòng, shortcut và đăng ký cài đặt.
+- **FR-056**: Gỡ mặc định MUST giữ model, cache tải installer, log, lịch sử, settings, API key và mọi output của người dùng.
+- **FR-057**: Trình gỡ MUST cung cấp một lựa chọn độc lập, mặc định tắt, để xóa model, cache, log, lịch sử, settings và API key; lỗi xóa MUST được báo thay vì tuyên bố đã dọn sạch hoàn toàn.
+- **FR-058**: Trình gỡ MUST cung cấp một lựa chọn riêng, mặc định tắt, để xóa output; MUST hiển thị đúng đường dẫn và yêu cầu xác nhận nguy hiểm lần hai; với thư mục tùy chỉnh, hệ thống chỉ được xóa file được ghi nhận do ứng dụng tạo và MUST không xóa video nguồn hoặc toàn bộ thư mục tùy ý.
+- **FR-059**: Hệ thống MUST lập danh sách GPU NVIDIA thực tế gồm GPU được chọn, VRAM, khả năng khởi tạo CUDA và các kiểu tính toán được hỗ trợ; việc cho phép STT MUST dựa trên khả năng này chứ không dựa vào tên thương mại của GPU.
+- **FR-060**: Catalog model MUST giữ `large-v3` là mặc định, đồng thời cung cấp model/profile nhẹ cho GPU khoảng 4 GiB; mọi thay đổi khỏi model người dùng đang chọn MUST cần xác nhận rõ ràng và không được diễn ra âm thầm.
+- **FR-061**: GPU, model, kiểu tính toán, batch size và profile có hiệu lực MUST được truyền xuyên suốt tới job STT; GPU được chọn phải là GPU thực sự xử lý và invariant một job STT GPU tại một thời điểm MUST được giữ nguyên.
+- **FR-062**: Hệ thống MUST giải phóng tài nguyên GPU giữa giai đoạn nhận dạng và alignment, phân loại lỗi thiếu VRAM ổn định, tự retry nhiều nhất một lần với cùng model và batch không lớn hơn, rồi dừng với hướng dẫn rõ ràng nếu vẫn thất bại.
 
 ### Key Entities *(include if feature involves data)*
 
@@ -189,6 +239,11 @@ Feature này chạm đến STT, translation, model selection, System Info, worke
 - **Translation Provider**: Provider dịch người dùng chọn; có tên provider, trạng thái API key trong kho bí mật hệ điều hành và trạng thái khả dụng.
 - **App Settings**: Cấu hình chung gồm GPU được chọn, thư mục model, đường dẫn ffmpeg, đường dẫn Subtitle Edit và thư mục output mặc định.
 - **System Info Snapshot**: Thông tin runtime hiển thị trong About gồm version dependency, GPU/CUDA, model đang chọn, dung lượng model và app version.
+- **Runtime Bundle**: Tập các phần runtime bất biến của một bản phát hành; có version, nhận dạng nội dung, thứ tự phần, dung lượng và checksum để Setup xác minh và tái sử dụng an toàn.
+- **Installer Cache Entry**: Một file runtime hoàn chỉnh hoặc đang tải một phần; có bundle liên quan, dung lượng/checksum mong đợi, tiến độ và trạng thái xác minh để quyết định tiếp tục, tái sử dụng hoặc loại bỏ.
+- **Installer Lifecycle**: Trạng thái cài mới, sửa chữa hoặc nâng cấp; theo dõi runtime active, staging, previous và kết quả kích hoạt/rollback.
+- **Uninstall Selection**: Các lựa chọn xóa ứng dụng, dữ liệu riêng và output trong một phiên gỡ; hai phạm vi dữ liệu tùy chọn độc lập và mặc định tắt.
+- **GPU Execution Profile**: Cấu hình thực thi được chọn từ khả năng GPU thực tế; gồm model, kiểu tính toán, batch size, mức tương thích VRAM và trạng thái người dùng đã xác nhận.
 
 ## Success Criteria *(mandatory)*
 
@@ -207,6 +262,13 @@ Feature này chạm đến STT, translation, model selection, System Info, worke
 - **SC-011**: 100% kiểm tra bảo mật cấu hình xác nhận API key không xuất hiện plaintext trong file cấu hình, file phụ đề, log hoặc thông báo lỗi thông thường.
 - **SC-012**: Sau khi đóng ứng dụng giữa lúc xử lý và mở lại, 100% hàng đợi, cấu hình job và kết quả đã hoàn tất được khôi phục; job đang chạy trước đó hiển thị là cần chạy lại.
 - **SC-013**: 100% yêu cầu tạm dừng job chưa chạy có hiệu lực ngay; 100% yêu cầu tạm dừng job đang chạy hiển thị trạng thái chờ checkpoint an toàn cho đến khi bước hiện tại kết thúc.
+- **SC-014**: Trong 100% lần thử trên máy Windows sạch thuộc ma trận phát hành, người dùng cài và mở được ứng dụng chỉ từ Setup mà không cài môi trường lập trình hoặc dùng dòng lệnh.
+- **SC-015**: Trong 100% lần thử ngắt tải tại nhiều thời điểm của ma trận cài đặt, lần chạy lại tái sử dụng phần hoàn chỉnh và tiếp tục phần tải hợp lệ; không tải lại toàn bộ bundle nếu dữ liệu đã có vẫn vượt qua kiểm tra toàn vẹn.
+- **SC-016**: Trong 100% lỗi kích hoạt được mô phỏng, nâng cấp giữ được bản cũ có thể chạy và cài mới không để runtime một phần được đánh dấu hoạt động.
+- **SC-017**: Trong bốn chế độ gỡ—giữ mặc định, chỉ xóa dữ liệu riêng, chỉ xóa output và xóa cả hai—100% file bị xóa/giữ đúng lựa chọn; video nguồn và file không do ứng dụng sở hữu không bị xóa.
+- **SC-018**: Trên RTX 2050 4 GiB hoặc GPU NVIDIA CUDA 4 GiB tương đương, profile nhẹ đã được người dùng xác nhận xử lý tuần tự ít nhất hai video tiếng Anh qua nhận dạng, alignment và xuất SRT mà không CUDA OOM.
+- **SC-019**: Trong 100% kiểm thử máy nhiều GPU, System Info hiển thị đúng GPU được chọn và job STT chạy trên đúng GPU số đó; không có hành vi phụ thuộc vào tên GPU nhà phát triển.
+- **SC-020**: 100% asset của bản phát hành được chấp nhận có version/tag/commit nhất quán, đúng tên/dung lượng/checksum trong manifest và không có runtime volume nào vượt giới hạn của kênh phát hành.
 
 ## Assumptions
 
@@ -217,3 +279,8 @@ Feature này chạm đến STT, translation, model selection, System Info, worke
 - Nếu file output đã tồn tại, ứng dụng mặc định tự động tạo tên duy nhất bằng hậu tố như `(1)`, `(2)` và không ghi đè tự động; ghi đè chỉ xảy ra khi người dùng chủ động chọn ghi đè trong giao diện.
 - Nếu ứng dụng đóng khi còn job đang chạy, hàng đợi và cấu hình job được khôi phục; job chưa hoàn tất sẽ ở trạng thái cần chạy lại sau khi mở ứng dụng.
 - Subtitle Edit là công cụ tùy chọn; không cấu hình Subtitle Edit không được chặn việc tạo hoặc xuất phụ đề.
+- Bản Windows đầu tiên hỗ trợ Windows 10/11 x64; Windows ARM và CPU-only STT nằm ngoài phạm vi RC5.
+- Setup là online installer nhỏ; runtime được lấy khi cài, còn Whisper model không nằm trong bộ cài và được tải khi người dùng chọn dùng lần đầu.
+- Kết nối mạng, proxy hoặc chính sách máy có thể không hỗ trợ tiếp tục tải; khi đó Setup được phép chuyển sang HTTPS từ đầu cho phần bị ảnh hưởng nhưng không được bỏ qua kiểm tra toàn vẹn.
+- `large-v3` tiếp tục là model mặc định theo constitution; profile 4 GiB là lựa chọn tương thích do người dùng xác nhận, không phải thay đổi mặc định toàn cục.
+- Chỉ được tuyên bố hỗ trợ GPU NVIDIA 4 GiB đã xác minh sau khi SC-018 pass trên phần cứng thật; test mock hoặc giới hạn VRAM nhân tạo không thay thế gate này.

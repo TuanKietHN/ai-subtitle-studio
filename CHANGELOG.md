@@ -7,6 +7,44 @@ The project follows Semantic Versioning. Release candidates use the
 
 ## [Unreleased]
 
+## [0.1.0-rc.5] - Unreleased
+
+### Added
+
+- Added a configuration-driven 4 GiB NVIDIA GPU profile for hardware such as
+  RTX 2050, including `small.en`/`small`, `int8_float16`, batch size 1, GPU
+  inventory, VRAM/capability diagnostics and an explicit model-change prompt.
+- Added safe uninstall choices for private application data and application-
+  owned subtitle outputs, with both choices disabled by default.
+- Added a persistent, runtime-identity-scoped installer cache with local-volume
+  reuse, resumable BITS transfer and verified HTTPS fallback.
+
+### Changed
+
+- Runtime activation now stages on the installation volume, smoke-tests before
+  activation and atomically rolls back to the previous runtime on failure.
+- Release manifests now bind every runtime volume and dependency identity to a
+  deterministic `runtime_bundle_id`.
+- WhisperX now propagates compute type and batch size, releases ASR memory
+  before alignment, reports peak GPU memory and retries CUDA OOM at most once.
+
+### Fixed
+
+- Fixed the RC4 fresh-install failure caused by activating the runtime before
+  the per-user application directory existed.
+- Prevented repair/retry of the exact same runtime bundle from downloading and
+  extracting the already active payload again.
+
+### Known issues and release gates
+
+- RC5 is unsigned and must remain a GitHub pre-release; Windows SmartScreen may
+  warn until Authenticode signing is available.
+- Clean-Windows install/resume/upgrade/uninstall, real NVIDIA 4 GiB and real
+  Google/DeepSeek acceptance remain required before publication claims are
+  expanded.
+- Locally generated assets whose manifest records `git_commit=uncommitted` are
+  validation-only and must be rebuilt from the clean tagged commit.
+
 ## [0.1.0-rc.4] - 2026-08-01
 
 ### Fixed

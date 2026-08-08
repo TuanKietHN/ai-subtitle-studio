@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "app_version": "0.1.0-rc.4",
+  "app_version": "0.1.0-rc.5",
   "python_version": "3.13.7",
   "platform": "windows-x64",
   "architecture": "x64",

@@ -4,23 +4,50 @@ Quy trình này dùng giao diện web GitHub và lệnh `git`, không yêu cầu
 Hướng dẫn build/upload EXE đầy đủ nằm tại
 [`docs/RELEASE_EXE.md`](./RELEASE_EXE.md).
 
-## 1. Tạo repository
+## 1. Trạng thái repository hiện tại
 
-Tạo `ai-subtitle-studio` trên `https://github.com/new` dưới dạng private repository.
-Không khởi tạo README, license hoặc `.gitignore` vì các file đó đã có trong
-source.
-
-Thêm remote và push:
+Repository đã tồn tại tại
+`https://github.com/TuanKietHN/ai-subtitle-studio` và hiện là **public**. Remote
+cục bộ phải là địa chỉ này:
 
 ```powershell
-git remote add origin https://github.com/<owner>/ai-subtitle-studio.git
+git remote -v
+```
+
+Chỉ khi tạo lại repository mới, dùng `https://github.com/new` và không khởi tạo
+README hoặc `.gitignore` vì source đã có hai file đó. Dự án hiện chưa có
+`LICENSE`; không chọn license tùy ý trên GitHub nếu chủ sở hữu chưa quyết định.
+
+Nếu máy mới chưa có remote, thêm và push:
+
+```powershell
+git remote add origin https://github.com/TuanKietHN/ai-subtitle-studio.git
 git remote -v
 git push -u origin main
 ```
 
-Giữ repository private cho đến khi chủ sở hữu chọn source license, kiểm tra
-history và quyết định rõ việc công khai source. Third-party notices đã có nhưng
-không tự động thay thế quyết định license của chủ sở hữu.
+Public repository không tự động biến source thành open source. Third-party
+notices đã có nhưng không thay thế `LICENSE` của chính dự án. Trước khi nhận
+contribution hoặc cho phép tái phân phối source, chủ sở hữu phải chọn license và
+kiểm tra lịch sử không có credential/dữ liệu riêng tư.
+
+### Trạng thái xác minh RC5 ngày 2026-08-08
+
+- [x] Remote local trỏ tới `TuanKietHN/ai-subtitle-studio`.
+- [x] Tài liệu và contract tests xác nhận repository public, release workflow
+  không dùng GitHub CLI và runner dùng label `ai-subtitle-release`.
+- [x] Workflow nguồn, security và release có trong repository local; toàn bộ 158
+  automated tests pass.
+- [ ] Xác nhận trên GitHub web rằng environment `windows-release` tồn tại và có
+  reviewer/approval phù hợp.
+- [ ] Xác nhận self-hosted runner đang Online với đủ bốn label bắt buộc.
+- [ ] Xác nhận branch ruleset của `main` và các security feature đã bật theo
+  GitHub plan hiện có.
+- [ ] Sau khi push commit RC5, xác nhận Source CI/Security checks xanh trên đúng
+  commit và release workflow chạy từ tag `v0.1.0-rc.5`.
+
+Các ô chưa đánh dấu cần quyền xem **Settings** hoặc cần commit/tag chưa tồn tại;
+không được suy đoán là đã hoàn thành chỉ từ source local.
 
 ## 2. Bảo vệ `main`
 
@@ -48,6 +75,9 @@ Quy trình khuyến nghị hiện tại:
    `verify-release.ps1 -ReleaseDirectory`.
 7. Chạy clean-machine/GPU/API acceptance.
 8. Publish dưới dạng pre-release nếu chưa ký số hoặc còn stable gate chưa đạt.
+
+Nội dung để dán vào ô **Release notes** của RC5 nằm tại
+[`RELEASE_NOTES_v0.1.0-rc.5.md`](./RELEASE_NOTES_v0.1.0-rc.5.md).
 
 ## 4. Workflow build bundle tùy chọn
 

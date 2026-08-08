@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from ai_subtitle_studio.domain.entities import WhisperModel
+from ai_subtitle_studio.config.gpu_profiles import KNOWN_PROFILE_IDS
 
 DEFAULT_MODEL_ID = "large-v3"
 
@@ -21,7 +22,7 @@ class ModelCatalog:
     @classmethod
     def load(cls, path: str | Path) -> "ModelCatalog":
         data = json.loads(Path(path).read_text(encoding="utf-8"))
-        models = [WhisperModel(id=item["id"], display_name=item["display_name"], is_default=item["id"] == data.get("default_model", DEFAULT_MODEL_ID), enabled=bool(item.get("enabled", True)), description=item.get("description", ""), recommended_vram_gb=item.get("recommended_vram_gb")) for item in data.get("models", [])]
+        models = [WhisperModel(id=item["id"], display_name=item["display_name"], is_default=item["id"] == data.get("default_model", DEFAULT_MODEL_ID), enabled=bool(item.get("enabled", True)), description=item.get("description", ""), recommended_vram_gb=item.get("recommended_vram_gb"), execution_profile_ids=list(item.get("execution_profile_ids", []))) for item in data.get("models", [])]
         return cls(models=models, default_model=data.get("default_model", DEFAULT_MODEL_ID))
 
     def validate(self) -> None:
@@ -33,6 +34,10 @@ class ModelCatalog:
         defaults = [m for m in self.models if m.is_default]
         if len(defaults) != 1 or defaults[0].id != DEFAULT_MODEL_ID:
             raise ModelCatalogError("Catalog must contain exactly one default large-v3 model")
+        for model in self.models:
+            unknown = set(model.execution_profile_ids) - KNOWN_PROFILE_IDS
+            if unknown:
+                raise ModelCatalogError(f"Model {model.id} references unknown execution profiles: {sorted(unknown)}")
 
     def enabled_models(self) -> list[WhisperModel]:
         return [m for m in self.models if m.enabled]

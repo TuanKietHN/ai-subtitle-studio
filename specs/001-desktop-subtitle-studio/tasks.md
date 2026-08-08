@@ -249,7 +249,7 @@
 - [X] T110 Add repository hygiene contract tests for ignored private/generated files and single-source versioning in `tests/contract/test_repository_hygiene.py`
 - [X] T111 Initialize the local `main` Git repository and verify the source-only index using `.git/`, `.gitignore`, and `scripts/verify-repository.ps1`
 
-**Checkpoint**: Local Git repository is valid, source-only, private-ready, and passes hygiene tests.
+**Checkpoint**: Local Git repository is valid, source-only, safe for the selected visibility, and passes hygiene tests without implying a source license.
 
 ---
 
@@ -357,9 +357,30 @@ creates a verifiable artifact bundle from a tag for manual web publication.
 - [X] T157 Run NVIDIA two-video/model-download/queue/cancel/retry/recovery acceptance and record evidence in `specs/001-desktop-subtitle-studio/quickstart.md`
 - [ ] T158 Run Google/DeepSeek/edit/English-Vietnamese-bilingual export acceptance and record evidence in `specs/001-desktop-subtitle-studio/quickstart.md`
 - [ ] T159 Run no-GPU, Subtitle Edit, logging redaction, SmartScreen and signature acceptance and record evidence in `specs/001-desktop-subtitle-studio/quickstart.md`
-- [ ] T160 Prepare versioned release notes and known issues in `CHANGELOG.md` and GitHub draft release
-- [ ] T161 Create/push the private GitHub repository, configure protected environment/secrets/branch rules, and verify Actions in `docs/GITHUB_SETUP.md`
-- [ ] T162 Create `v0.1.0-rc.1`, verify the downloaded draft assets, and publish pre-release or stable according to signing/acceptance gates
+- [ ] T160 Prepare versioned release notes and known issues in `CHANGELOG.md` and `docs/RELEASE_NOTES_v0.1.0-rc.5.md`, then create the GitHub draft pre-release
+- [ ] T161 Verify the existing public repository `https://github.com/TuanKietHN/ai-subtitle-studio`, configure the protected `windows-release` environment, runner labels, repository secrets/variables and branch rules, then record successful Actions evidence in `docs/GITHUB_SETUP.md`
+- [ ] T162 Commit the completed RC5 source, create immutable tag `v0.1.0-rc.5` on that clean commit, rebuild the version-scoped bundle, verify downloaded draft assets against the committed SHA, and publish RC5 only as a pre-release; create stable tag `v0.1.0` later only after signing and all acceptance gates pass
+
+---
+
+## Phase 16: User Story 6 — Install, Upgrade, Uninstall and 4 GiB GPU (Priority: P1)
+
+**Goal**: Deliver one-click RC5 installation with resumable verified runtime delivery, safe activation/rollback, selective uninstall and a user-confirmed NVIDIA 4 GiB execution profile.
+
+**Independent Test**: On clean Windows, install using only Setup, interrupt/resume one runtime download, upgrade from RC4, run all four uninstall modes, then process two English MP4 files sequentially on a real NVIDIA 4 GiB GPU with the confirmed low-VRAM profile.
+
+- [X] T163 [US6] Add regression tests and implement `{app}` creation, `{app}\runtime.staging`, same-volume atomic activation, validation, rollback and staging cleanup in `tests/contract/test_installer_contract.py` and `packaging/installer/ai-subtitle-studio.iss` per FR-053 and plan:R3A
+- [X] T164 [US6] Add tests and implement running-application detection plus distinct fresh-install/repair/upgrade/error messages in `tests/contract/test_installer_contract.py` and `packaging/installer/ai-subtitle-studio.iss` per FR-054 and plan:R3A
+- [X] T165 [US6] Add tests and implement verified `{src}` reuse, persistent cache, resumable BITS transfer, Inno HTTPS fallback and aggregate `CreateDownloadPage` progress/speed/ETA in `tests/contract/test_installer_contract.py` and `packaging/installer/ai-subtitle-studio.iss` per FR-050–FR-052 and plan:R3B
+- [X] T166 [US6] Add tests and implement deterministic `runtime_bundle_id` in manifest schema/generation/verifier, generated installer constants, cache metadata and installed marker with same-runtime skip in `tests/contract/test_release_manifest.py`, `tests/unit/test_release_verifier.py`, `packaging/release-manifest.schema.json`, `scripts/generate-release-manifest.ps1`, `src/ai_subtitle_studio/release_verifier.py` and `packaging/installer/ai-subtitle-studio.iss` per FR-050 and FR-054
+- [X] T167 [US6] Add tests and implement Start Menu uninstall shortcut, default-preserve uninstall, private-data cleanup helper and separately confirmed app-owned output cleanup in `tests/contract/test_installer_contract.py`, `tests/unit/test_cleanup_user_data.py`, `src/ai_subtitle_studio/maintenance/cleanup_user_data.py`, `src/ai_subtitle_studio/app.py` and `packaging/installer/ai-subtitle-studio.iss` per FR-055–FR-058 and plan:R3C
+- [X] T168 [US6] Add tests and implement NVIDIA inventory with VRAM, compute capability, driver, CTranslate2 compute types and Torch-only CUDA readiness in `tests/unit/test_system_info.py`, `tests/contract/test_stt_engine_contract.py`, `src/ai_subtitle_studio/config/system_info.py`, `src/ai_subtitle_studio/domain/entities.py` and `src/ai_subtitle_studio/stt/whisperx_engine.py` per FR-059 and plan:R3D
+- [X] T169 [US6] Add tests and implement config-driven `small.en`/`small` catalog entries plus 4 GiB execution-profile resolution without changing the `large-v3` default in `tests/contract/test_model_catalog_contract.py`, `tests/unit/test_gpu_execution_profiles.py`, `resources/models.json` and `src/ai_subtitle_studio/config/gpu_profiles.py` per FR-060 and plan:R3D
+- [X] T170 [US6] Add tests and implement effective `compute_type`/`batch_size`/profile propagation through settings, jobs, `TranscriptionRequest` and `model.transcribe()` in `tests/unit/test_app_settings.py`, `tests/integration/test_runtime_settings_propagation.py`, `src/ai_subtitle_studio/domain/entities.py`, `src/ai_subtitle_studio/config/app_settings.py`, `src/ai_subtitle_studio/stt/base.py`, `src/ai_subtitle_studio/workers/job_runner.py` and `src/ai_subtitle_studio/stt/whisperx_engine.py` per FR-061 and plan:R3D
+- [X] T171 [US6] Add tests and implement ASR/alignment phase resource release, garbage collection, CUDA cache cleanup and peak-memory diagnostics in `tests/contract/test_stt_engine_contract.py` and `src/ai_subtitle_studio/stt/whisperx_engine.py` per FR-062 and plan:R3D
+- [X] T172 [US6] Add tests and implement stable `gpu_out_of_memory` classification with cleanup and at most one same-model retry in `tests/contract/test_stt_engine_contract.py`, `src/ai_subtitle_studio/stt/base.py`, `src/ai_subtitle_studio/stt/whisperx_engine.py` and `src/ai_subtitle_studio/domain/entities.py` per FR-062 and plan:R3D
+- [X] T173 [US6] Add tests and implement real GPU/profile selection, VRAM compatibility warnings and expanded System Info diagnostics in `tests/gui/test_settings_about.py`, `src/ai_subtitle_studio/ui/settings_dialog.py`, `src/ai_subtitle_studio/ui/about_dialog.py`, `src/ai_subtitle_studio/ui/main_window.py` and `src/ai_subtitle_studio/app.py` per FR-059–FR-061 and plan:R3D
+- [X] T174 [US6] Extend release verifier/contract coverage for RC5 installer lifecycle, runtime identity, cache marker, low-VRAM invariants and update validation evidence in `tests/contract/`, `tests/unit/`, `scripts/verify-release.ps1` and `specs/001-desktop-subtitle-studio/quickstart.md` per SC-014–SC-020 and plan:R4-R5
 
 **Checkpoint**: All release gates pass and the GitHub installer is downloadable; otherwise the release remains a draft/pre-release with evidence of the missing external gate.
 
@@ -380,6 +401,7 @@ creates a verifiable artifact bundle from a tag for manual web publication.
 - **R3 (Phase 13)**: Depends on R2 runtime output; produces installer/release assets.
 - **R4 (Phase 14)**: Depends on reproducible R2/R3 scripts; automates CI/release.
 - **R5 (Phase 15)**: Depends on R0-R4 and requires clean Windows/GPU/API/signing/GitHub external state.
+- **US6/RC5 Convergence (Phase 16)**: Depends on R2-R4 artifacts and is independently complete in source only after installer/GPU contracts pass; publication still depends on the external R5 gates.
 
 ### User Story Dependencies
 
@@ -388,6 +410,7 @@ creates a verifiable artifact bundle from a tag for manual web publication.
 - **US3 (P1)**: Starts after Foundation; full manual test benefits from US1-generated English subtitles, but provider/export code can be developed independently.
 - **US4 (P2)**: Starts after Foundation; integrates with US1 job runner and persistence.
 - **US5 (P2)**: Starts after Foundation; settings/about/subprocess launch can be developed independently and then wired to US1/US2/US3.
+- **US6 (P1)**: Uses the frozen runtime produced by R2, but installer lifecycle/uninstall behavior and 4 GiB profile behavior can be tested independently from translation; final acceptance depends on clean Windows and real 4 GiB NVIDIA hardware.
 
 ### Within Each User Story
 
@@ -404,6 +427,7 @@ creates a verifiable artifact bundle from a tag for manual web publication.
 - Story test tasks marked [P] can run in parallel within their story.
 - US2 and US5 can progress in parallel after Foundation because they mostly touch separate model/settings/about files.
 - US3 provider implementations T063 and T064 can run in parallel after T062 and T065 contract wiring expectations are clear.
+- Within US6, installer tasks T163-T167 and GPU tasks T168-T173 can progress in parallel before the combined verifier/evidence task T174.
 
 ## Parallel Example: User Story 1
 
@@ -438,7 +462,8 @@ Task: "T060 [P] [US3] Add subtitle table edit and export tests in tests/gui/test
 2. Add US3 translation/edit/export completeness.
 3. Add US4 pause/cancel/retry/recovery controls.
 4. Add US5 settings/about/Subtitle Edit integration.
-5. Run Phase 8 validation and packaging checks.
+5. Add US6 one-click delivery, safe uninstall and 4 GiB GPU compatibility.
+6. Run Phase 8 validation and packaging/release checks.
 
 ### Validation Gates
 
@@ -458,3 +483,19 @@ Task: "T060 [P] [US3] Add subtitle table edit and export tests in tests/gui/test
 - All user story tasks include exact file paths for implementability.
 - Tasks intentionally include tests where constitution gates require proof.
 - Subtitle Edit is only launched for manual editing; it is not part of automatic translation.
+- RC5 local implementation audit (2026-08-08): all 158 tests, compileall, pip
+  dependency check, PowerShell parsing, diff check and local release verification
+  pass. T163-T174 remain complete.
+- T098 and T158 remain open because no dedicated Google/DeepSeek test
+  credentials are present; mocked provider tests do not replace manual real-API
+  acceptance.
+- T156 remains open because this builder has no Windows Sandbox or separate
+  clean Windows machine for fresh/resume/upgrade/uninstall evidence.
+- T159 remains open because the available RTX 5060 is not a no-GPU machine and
+  the RC5 Setup is intentionally unsigned; historical Subtitle Edit and logging
+  evidence only satisfy part of that task.
+- T160 remains open only for the GitHub draft action; local versioned notes are
+  ready in `CHANGELOG.md` and `docs/RELEASE_NOTES_v0.1.0-rc.5.md`.
+- T161 remains open for GitHub Settings/Actions evidence. T162 remains open for
+  the owner's clean commit/push, immutable RC5 tag, post-commit rebuild,
+  browser-download verification and pre-release publication.

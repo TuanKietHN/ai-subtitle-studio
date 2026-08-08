@@ -158,6 +158,7 @@ Represents user preferences stored through QSettings.
 - `default_output_dir`: Directory for generated subtitle files.
 - `last_model_id`: Last selected model, defaults to `large-v3` if absent or invalid.
 - `last_translation_provider_id`: Last selected translation provider.
+- `last_compute_profile_id`: Last explicitly confirmed GPU execution profile; nullable so hardware detection can recommend a profile on first run.
 
 **Validation rules**:
 - Paths must exist and be usable before dependent operations run.
@@ -173,13 +174,62 @@ Represents runtime diagnostics shown in About/System Info.
 - `faster_whisper_version`: `importlib.metadata.version("faster-whisper")` result or unavailable.
 - `torch_cuda_version`: `torch.version.cuda` result or unavailable.
 - `gpu_driver_version`: `nvidia-smi` detected driver version or unavailable.
-- `detected_gpus`: List of GPU ids/names.
+- `detected_gpus`: List of `GpuCapabilitySnapshot` records, not only id/name strings.
+- `torch_cuda_ready`: Whether Torch can initialize CUDA on the selected device.
+- `effective_compute_profile_id`: Profile that would be used for a new STT job.
 - `selected_model_id`: Current model id.
 - `downloaded_models_size_bytes`: Total local model cache size.
 
 **Validation rules**:
 - No version value may be hard-coded.
 - Missing CUDA/GPU must be reported clearly without fake placeholders.
+- `nvidia-smi` success alone must not set `torch_cuda_ready=true`.
+
+### GpuCapabilitySnapshot
+
+Represents one detected NVIDIA GPU and the evidence used for STT compatibility decisions.
+
+**Fields**:
+- `gpu_id`: Stable CUDA/NVIDIA index used by the current process.
+- `name`: Device name reported by NVIDIA/Torch.
+- `driver_version`: NVIDIA driver version.
+- `total_vram_bytes`, `free_vram_bytes`: Capacity and currently available device memory at detection time.
+- `compute_capability`: CUDA major/minor capability when Torch can query it.
+- `torch_cuda_ready`: True only after Torch CUDA availability/device initialization succeeds.
+- `ctranslate2_compute_types`: Supported compute types returned for the selected CUDA device.
+- `compatibility`: `supported`, `low_vram`, `driver_error`, `cuda_unavailable`, or `unsupported_compute_type`.
+- `diagnostic_message`: Non-secret actionable explanation shown in System Info/Settings.
+
+**Validation rules**:
+- A GPU can be listed for diagnostics while `torch_cuda_ready=false`, but cannot start STT.
+- VRAM values must be byte counts internally and formatted only at the UI boundary.
+- Selection uses `gpu_id`; no logic may branch on a hard-coded marketing name such as `RTX 2050`.
+
+### GpuExecutionProfile
+
+Config-driven STT resource profile resolved from GPU capability and the selected model.
+
+**Fields**:
+- `profile_id`: Stable id such as `low-vram-4gb`, `balanced-6gb`, or `quality-8gb-plus`.
+- `minimum_vram_bytes`: Capacity floor for automatic recommendation.
+- `recommended_model_ids`: Ordered model ids from `models.json`.
+- `compute_type`: Effective CTranslate2 compute type.
+- `batch_size`: Positive WhisperX transcription batch size.
+- `allow_diarization`: False for the RC5 4 GiB profile.
+- `oom_retry_batch_size`: Optional smaller batch used for the single bounded retry.
+- `user_confirmation_required`: Whether applying the profile changes the user's selected model.
+
+**RC5 4 GiB profile**:
+- Recommends `small.en` for English input and `small` only when multilingual recognition is needed.
+- Uses `int8_float16` when reported by CTranslate2 and `batch_size=1`.
+- Does not change the catalog default away from `large-v3`.
+- Does not expose or alter mandatory `vad_method="pyannote"`.
+
+**Validation rules**:
+- Model ids must resolve through `models.json`; the resolver cannot hard-code dropdown contents.
+- The effective compute type must be supported by the selected device.
+- `batch_size >= 1` and OOM retry count is at most one per STT attempt.
+- A profile may recommend a different model but cannot silently replace the user's selection.
 
 ## SQLite Persistence Notes
 
@@ -253,6 +303,7 @@ Machine-readable contract used by verification tooling and as the source for ins
 - `install_scope`: `current_user`.
 - `installed_size_bytes`: Required disk space after extraction.
 - `temporary_space_bytes`: Required temporary disk space during install.
+- `runtime_bundle_id`: Deterministic identity for the complete ordered runtime payload.
 - `artifacts`: Ordered list of `ReleaseArtifact`.
 
 **Validation rules**:
@@ -260,6 +311,85 @@ Machine-readable contract used by verification tooling and as the source for ins
 - All required artifacts must be present and hash-valid before publish.
 - Installer-embedded URLs/hashes must be generated from the same manifest.
 - Manifest validation must fail closed on missing or unknown required fields.
+- `runtime_bundle_id` must change when any ordered runtime volume hash/size or frozen build identity changes.
+
+### RuntimeBundleIdentity
+
+Identifies whether a verified cached or installed runtime can be reused independently from its release filename.
+
+**Fields**:
+- `schema_version`: Runtime marker schema.
+- `runtime_bundle_id`: Lowercase digest derived from ordered volume hashes/sizes and `BuildIdentity` runtime fields.
+- `volume_names`: Ordered source asset names.
+- `volume_sha256`: Ordered SHA-256 values.
+- `installed_at_utc`: Successful activation time for the local marker.
+- `app_version`: Release that activated the marker.
+
+**Validation rules**:
+- Same-runtime upgrade skip is allowed only after the installed marker parses and its `runtime_bundle_id` equals the new manifest.
+- Missing, malformed or mismatched markers trigger a full verified install.
+- A partial cache or filename match can never substitute for the identity/hash checks.
+
+### InstallerDownloadCacheEntry
+
+Represents one versioned runtime volume in persistent installer cache.
+
+**Fields**:
+- `runtime_bundle_id`: Parent runtime identity.
+- `volume_index`, `asset_name`, `download_url`: Expected release metadata.
+- `expected_size_bytes`, `expected_sha256`: Integrity contract.
+- `local_path`: Final cache file path.
+- `partial_path`: `.part` path used by resumable transfer.
+- `bits_job_id`: Optional persisted BITS job id.
+- `bytes_downloaded`: Current partial size/progress.
+- `state`: `missing`, `partial`, `transferring`, `verified`, `invalid`, `expired`.
+- `last_attempt_at_utc`, `verified_at_utc`: Cache lifecycle timestamps.
+
+**Validation rules**:
+- Only `verified` entries may be extraction inputs.
+- Wrong bundle id/hash/size invalidates and removes the cache entry before retry.
+- Cancel/network failure preserves a valid `.part`; extraction/activation failure preserves verified complete cache.
+- Retention cleanup may remove expired installer cache but never model cache or subtitle output.
+
+### InstallerLifecycleState
+
+Ephemeral state used to make fresh install, upgrade and rollback messages/actions deterministic.
+
+**Fields**:
+- `mode`: `fresh_install`, `upgrade_same_runtime`, `upgrade_new_runtime`, or `repair`.
+- `app_dir_created`: Whether `{app}` exists and is writable.
+- `application_running`: Whether Restart Manager/app mutex reports the old app active.
+- `active_runtime_path`: `{app}\runtime`.
+- `staging_runtime_path`: `{app}\runtime.staging`.
+- `previous_runtime_path`: `{app}\runtime.previous`.
+- `download_source`: `setup_directory`, `verified_cache`, `bits`, `inno_fallback`, or `skipped_same_runtime`.
+- `activation_state`: `not_started`, `staged`, `previous_saved`, `active`, `rolled_back`, `failed`.
+
+**Validation rules**:
+- `{app}` must be created before staging or rename.
+- All three runtime paths must resolve under the exact install directory and on the same volume.
+- A running old app stops the lifecycle before mutation unless it closes successfully.
+- Fresh-install errors must not claim an old runtime was preserved.
+- `runtime.staging` is removed after success, cancellation, handled failure and uninstall.
+
+### UninstallSelection
+
+Records explicit user choices for one uninstall session; it is not persisted as an opt-out default.
+
+**Fields**:
+- `remove_application`: Always true for normal uninstall.
+- `remove_private_app_data`: Checkbox for model, installer cache, logs, SQLite history, QSettings and API keys; default false.
+- `remove_outputs`: Separate checkbox for generated subtitle outputs; default false.
+- `output_path_display`: Exact path shown before destructive confirmation.
+- `owned_output_files`: Files known from application metadata when output is custom.
+- `output_confirmation_granted`: Second confirmation required before output deletion.
+- `cleanup_failures`: Items that could not be removed and must be reported/logged.
+
+**Validation rules**:
+- The two optional checkboxes are independent and unchecked by default.
+- Credential cleanup runs through the app/keyring before runtime deletion.
+- Custom output cleanup deletes only `owned_output_files`, never the entire arbitrary directory.
+- Source video paths are never uninstall targets.
 
 ### InstallationLayout
 
@@ -267,13 +397,21 @@ Defines ownership boundaries between application binaries and user data.
 
 **Paths**:
 - `install_dir`: `%LOCALAPPDATA%\Programs\AI Subtitle Studio`
-- `data_dir`: `%LOCALAPPDATA%\AI Subtitle Studio\data`
+- `data_root`: `%LOCALAPPDATA%\AI Subtitle Studio`
+- `database_path`: `%LOCALAPPDATA%\AI Subtitle Studio\ai_subtitle_studio.sqlite3`
 - `model_cache_dir`: `%LOCALAPPDATA%\AI Subtitle Studio\models`
 - `log_dir`: `%LOCALAPPDATA%\AI Subtitle Studio\logs`
-- `default_output_dir`: `%USERPROFILE%\Documents\AI Subtitle Studio\Outputs`
+- `installer_cache_dir`: `%LOCALAPPDATA%\AI Subtitle Studio\installer-cache\<runtime_bundle_id>`
+- `default_output_dir`: `%USERPROFILE%\Documents\AI Subtitle Studio\outputs`
+- `active_runtime_dir`: `%LOCALAPPDATA%\Programs\AI Subtitle Studio\runtime`
+- `staging_runtime_dir`: `%LOCALAPPDATA%\Programs\AI Subtitle Studio\runtime.staging`
+- `previous_runtime_dir`: `%LOCALAPPDATA%\Programs\AI Subtitle Studio\runtime.previous`
 
 **Validation rules**:
 - Installer owns only `install_dir`, shortcuts and uninstall registration.
 - Upgrade may replace `install_dir` but must preserve all user-data paths.
-- Uninstall must preserve database, model cache, credentials and output by default.
+- Installer may read/write `installer_cache_dir` for verified download reuse, but default uninstall preserves it with other user data.
+- Uninstall must preserve database, model cache, settings, credentials and output by default.
+- Optional private-data cleanup may remove `data_root` only after credential/QSettings cleanup and must not imply output deletion.
+- Optional output cleanup follows `UninstallSelection` ownership and double-confirmation rules.
 - The app must not write persistent data inside PyInstaller `_internal`, `_MEIPASS` or a protected system directory.

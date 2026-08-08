@@ -1,12 +1,14 @@
 import logging
 from dataclasses import fields
+import sys
 from threading import Thread
 import time
+from types import SimpleNamespace
 import wave
 
 import pytest
 
-from ai_subtitle_studio.stt.base import TranscriptionCanceled, TranscriptionFailed, TranscriptionRequest
+from ai_subtitle_studio.stt.base import GpuOutOfMemoryError, TranscriptionCanceled, TranscriptionFailed, TranscriptionRequest
 from ai_subtitle_studio.stt.gpu_lock import GPUSTTLock
 from ai_subtitle_studio.stt import whisperx_engine
 from ai_subtitle_studio.stt.whisperx_engine import WhisperXEngine
@@ -108,7 +110,159 @@ def test_whisperx_engine_configures_vad_when_loading_model():
     result = engine.transcribe(TranscriptionRequest(job_id="j1", audio_path="a.wav", model_id="large-v3"))
     assert result.language == "en"
     assert fake.load_kwargs["vad_method"] == "pyannote"
-    assert fake.model.kwargs == {}
+    assert fake.load_kwargs["device_index"] == 0
+    assert fake.model.kwargs == {"batch_size": 16}
+
+
+def test_whisperx_engine_passes_effective_batch_size():
+    fake = FakeWhisperX()
+    engine = WhisperXEngine(gpu_lock=GPUSTTLock(), gpu_available=lambda: True, whisperx_module=fake)
+
+    engine.transcribe(
+        TranscriptionRequest(
+            job_id="j1",
+            audio_path="a.wav",
+            model_id="small.en",
+            compute_type="int8_float16",
+            batch_size=1,
+            execution_profile_id="low-vram-4gb",
+        )
+    )
+
+    assert fake.load_kwargs["compute_type"] == "int8_float16"
+    assert fake.model.kwargs["batch_size"] == 1
+
+
+def test_whisperx_engine_selects_requested_torch_and_faster_whisper_gpu(monkeypatch):
+    selected = []
+    fake_cuda = SimpleNamespace(
+        is_available=lambda: True,
+        device_count=lambda: 2,
+        set_device=lambda index: selected.append(index),
+    )
+    monkeypatch.setitem(sys.modules, "torch", SimpleNamespace(cuda=fake_cuda))
+    monkeypatch.setattr(whisperx_engine, "_reset_peak_cuda_memory", lambda: None)
+    monkeypatch.setattr(whisperx_engine, "_log_peak_cuda_memory", lambda phase: None)
+    monkeypatch.setattr(whisperx_engine, "release_cuda_resources", lambda: None)
+    fake = FakeWhisperX()
+    engine = WhisperXEngine(gpu_lock=GPUSTTLock(), gpu_available=lambda: True, whisperx_module=fake)
+
+    engine.transcribe(
+        TranscriptionRequest(job_id="j1", audio_path="a.wav", model_id="small.en", gpu_id="1")
+    )
+    engine.transcribe(
+        TranscriptionRequest(job_id="j2", audio_path="b.wav", model_id="small.en", gpu_id=None)
+    )
+
+    assert selected == [1]
+    assert fake.load_kwargs["device_index"] == 1
+
+
+def test_nvidia_smi_does_not_make_torch_unavailable_gpu_ready(monkeypatch):
+    monkeypatch.setattr(whisperx_engine, "torch_cuda_ready", lambda: (False, "Torch CUDA failed"))
+
+    assert whisperx_engine.default_gpu_available() is False
+
+
+class OomThenSuccessModel(FakeModel):
+    def __init__(self, always_fail=False):
+        super().__init__()
+        self.calls = 0
+        self.always_fail = always_fail
+
+    def transcribe(self, path, **kwargs):
+        self.calls += 1
+        if self.always_fail or self.calls == 1:
+            raise RuntimeError("CUDA out of memory")
+        return super().transcribe(path, **kwargs)
+
+
+def test_cuda_oom_retries_once_with_same_model():
+    model = OomThenSuccessModel()
+    fake = FakeWhisperX(model=model)
+    engine = WhisperXEngine(gpu_lock=GPUSTTLock(), gpu_available=lambda: True, whisperx_module=fake)
+
+    result = engine.transcribe(
+        TranscriptionRequest(job_id="j1", audio_path="a.wav", model_id="small.en", batch_size=2)
+    )
+
+    assert result.language == "en"
+    assert model.calls == 2
+    assert model.kwargs["batch_size"] == 1
+    assert fake.load_args[0] == "small.en"
+
+
+def test_second_cuda_oom_maps_to_stable_error():
+    model = OomThenSuccessModel(always_fail=True)
+    engine = WhisperXEngine(
+        gpu_lock=GPUSTTLock(),
+        gpu_available=lambda: True,
+        whisperx_module=FakeWhisperX(model=model),
+    )
+
+    with pytest.raises(GpuOutOfMemoryError, match="GPU 4 GiB"):
+        engine.transcribe(
+            TranscriptionRequest(job_id="j1", audio_path="a.wav", model_id="small.en", batch_size=1)
+        )
+
+    assert model.calls == 2
+
+
+def test_asr_model_is_released_before_alignment(monkeypatch):
+    import gc
+    import weakref
+
+    released = []
+
+    class EphemeralWhisperX:
+        def load_model(self, *args, **kwargs):
+            model = FakeModel()
+            self.ref = weakref.ref(model)
+            return model
+
+        def load_align_model(self, language_code, device):
+            gc.collect()
+            released.append(self.ref() is None)
+            return object(), {"language": language_code}
+
+        def align(self, segments, align_model, metadata, audio_path, device):
+            return {"segments": segments}
+
+    engine = WhisperXEngine(
+        gpu_lock=GPUSTTLock(),
+        gpu_available=lambda: True,
+        whisperx_module=EphemeralWhisperX(),
+    )
+    monkeypatch.setattr(whisperx_engine, "release_cuda_resources", lambda: None)
+
+    engine.transcribe(TranscriptionRequest(job_id="j1", audio_path="a.wav", model_id="small.en"))
+
+    assert released == [True]
+
+
+def test_asr_resources_are_released_when_canceled_after_model_load(monkeypatch):
+    token = CancelToken()
+    released = []
+
+    class CancelAfterLoadWhisperX:
+        def load_model(self, *args, **kwargs):
+            token.cancel()
+            return FakeModel()
+
+    engine = WhisperXEngine(
+        gpu_lock=GPUSTTLock(),
+        gpu_available=lambda: True,
+        whisperx_module=CancelAfterLoadWhisperX(),
+    )
+    monkeypatch.setattr(whisperx_engine, "release_cuda_resources", lambda: released.append(True))
+
+    with pytest.raises(TranscriptionCanceled):
+        engine.transcribe(
+            TranscriptionRequest(job_id="j1", audio_path="a.wav", model_id="small.en"),
+            cancel=token,
+        )
+
+    assert released == [True]
 
 
 def test_whisperx_engine_uses_progress_callback_without_vad_filter():

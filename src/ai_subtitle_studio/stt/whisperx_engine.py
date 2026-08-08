@@ -3,15 +3,16 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
+import gc
 import importlib
 import logging
-import os
-import subprocess
 import time
 from typing import Any, Callable
 import wave
 
-from .base import GpuUnavailableError, TranscriptionCanceled, TranscriptionFailed, TranscriptionRequest, TranscriptionResult
+from ai_subtitle_studio.config.system_info import torch_cuda_ready
+
+from .base import GpuOutOfMemoryError, GpuUnavailableError, TranscriptionCanceled, TranscriptionFailed, TranscriptionRequest, TranscriptionResult
 from .gpu_lock import GLOBAL_GPU_STT_LOCK, GPUSTTLock
 
 logger = logging.getLogger(__name__)
@@ -20,18 +21,58 @@ ASR_PROGRESS_END = 70.0
 
 
 def default_gpu_available() -> bool:
+    ready, error = torch_cuda_ready()
+    if not ready:
+        logger.warning("Torch CUDA preflight failed: %s", error or "unknown error")
+    return ready
+
+
+def _is_cuda_oom(exc: BaseException) -> bool:
     try:
         import torch  # type: ignore
-        if getattr(torch, "cuda", None) is not None and torch.cuda.is_available():
+
+        oom_type = getattr(getattr(torch, "cuda", None), "OutOfMemoryError", None)
+        if oom_type is not None and isinstance(exc, oom_type):
             return True
     except Exception:
-        logger.debug("Torch CUDA availability check failed.", exc_info=True)
+        pass
+    return "cuda" in str(exc).lower() and "out of memory" in str(exc).lower()
+
+
+def _log_peak_cuda_memory(phase: str) -> None:
     try:
-        subprocess.run(["nvidia-smi"], capture_output=True, check=True, timeout=5)
-        return True
+        import torch  # type: ignore
+
+        if torch.cuda.is_available():
+            logger.info(
+                "CUDA peak for %s: allocated=%d reserved=%d",
+                phase,
+                int(torch.cuda.max_memory_allocated()),
+                int(torch.cuda.max_memory_reserved()),
+            )
     except Exception:
-        logger.debug("nvidia-smi availability check failed.", exc_info=True)
-        return False
+        logger.debug("Could not read CUDA peak memory for %s.", phase, exc_info=True)
+
+
+def _reset_peak_cuda_memory() -> None:
+    try:
+        import torch  # type: ignore
+
+        if torch.cuda.is_available():
+            torch.cuda.reset_peak_memory_stats()
+    except Exception:
+        logger.debug("Could not reset CUDA peak memory counters.", exc_info=True)
+
+
+def release_cuda_resources() -> None:
+    gc.collect()
+    try:
+        import torch  # type: ignore
+
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+    except Exception:
+        logger.debug("Could not release unused CUDA cache.", exc_info=True)
 
 
 def _clamp(value: float, minimum: float, maximum: float) -> float:
@@ -227,7 +268,9 @@ class WhisperXEngine:
         return self._whisperx
 
     def transcribe(self, request: TranscriptionRequest, progress=None, cancel=None) -> TranscriptionResult:
-        self._configure_gpu(request.gpu_id)
+        if request.batch_size < 1:
+            raise ValueError("batch_size must be positive")
+        device_index = self._configure_gpu(request.gpu_id)
         if request.device != "cuda" or not self.gpu_available():
             raise GpuUnavailableError("Không phát hiện NVIDIA/CUDA GPU hợp lệ")
         _control_checkpoint(cancel, "waiting_for_gpu")
@@ -235,13 +278,6 @@ class WhisperXEngine:
             progress(5, "waiting_for_gpu", None)
         with _acquire_gpu_interruptibly(self.gpu_lock, cancel):
             try:
-                _control_checkpoint(cancel, "loading_model")
-                if progress:
-                    progress(15, "loading_model", request.model_id)
-                model = self.whisperx.load_model(request.model_id, request.device, compute_type=request.compute_type, download_root=request.model_cache_dir, language=request.language_hint, vad_method="pyannote")
-                _control_checkpoint(cancel, "detecting_speech")
-                if progress:
-                    progress(ASR_PROGRESS_START, "transcribing", None)
                 duration_seconds = _audio_duration_seconds(request.audio_path) if progress else None
                 started_at = time.monotonic()
                 paused_seconds = 0.0
@@ -275,10 +311,59 @@ class WhisperXEngine:
                     last_asr_progress = percent
                     progress(percent, "transcribing", detail)
 
-                transcribe_kwargs = {"progress_callback": asr_progress_callback} if progress else {}
-                with _capture_vad_segments(model, transcription_checkpoint) as captured_vad:
-                    # WhisperX runs Pyannote VAD inside transcribe(); any long-audio chunking observed here comes from WhisperX/VAD merge_chunks.
-                    raw = model.transcribe(request.audio_path, **transcribe_kwargs)
+                attempt = 0
+                effective_batch_size = request.batch_size
+                raw = None
+                while raw is None:
+                    _control_checkpoint(cancel, "loading_model")
+                    if progress:
+                        progress(15, "loading_model", request.model_id)
+                    _reset_peak_cuda_memory()
+                    model = self.whisperx.load_model(
+                        request.model_id,
+                        request.device,
+                        compute_type=request.compute_type,
+                        download_root=request.model_cache_dir,
+                        language=request.language_hint,
+                        vad_method="pyannote",
+                        device_index=device_index,
+                    )
+                    phase_result = "asr"
+                    try:
+                        _control_checkpoint(cancel, "detecting_speech")
+                        if progress:
+                            progress(ASR_PROGRESS_START, "transcribing", None)
+                        transcribe_kwargs = {"batch_size": effective_batch_size}
+                        if progress:
+                            transcribe_kwargs["progress_callback"] = asr_progress_callback
+                        with _capture_vad_segments(model, transcription_checkpoint) as captured_vad:
+                            # WhisperX runs mandatory Pyannote VAD inside transcribe().
+                            raw = model.transcribe(request.audio_path, **transcribe_kwargs)
+                    except Exception as exc:
+                        is_oom = _is_cuda_oom(exc)
+                        phase_result = "asr-oom" if is_oom else "asr-failed"
+                        if not is_oom:
+                            raise
+                        if attempt >= 1:
+                            raise GpuOutOfMemoryError(
+                                "GPU 4 GiB không đủ VRAM sau một lần dọn bộ nhớ/thử lại; "
+                                "hãy chọn small.en + low-vram-4gb hoặc đóng ứng dụng GPU khác."
+                            ) from exc
+                        attempt += 1
+                        effective_batch_size = max(1, effective_batch_size // 2)
+                        logger.warning(
+                            "CUDA OOM for job %s; retrying once with model=%s batch_size=%d profile=%s.",
+                            request.job_id,
+                            request.model_id,
+                            effective_batch_size,
+                            request.execution_profile_id,
+                        )
+                        continue
+                    finally:
+                        _log_peak_cuda_memory(phase_result)
+                        del model
+                        release_cuda_resources()
+
                 _control_checkpoint(cancel, "aligning")
                 segments = raw.get("segments", []) if isinstance(raw, dict) else []
                 language = raw.get("language", request.language_hint) if isinstance(raw, dict) else request.language_hint
@@ -287,11 +372,18 @@ class WhisperXEngine:
                 aligned_segments = segments
                 if hasattr(self.whisperx, "load_align_model") and hasattr(self.whisperx, "align") and segments:
                     _control_checkpoint(cancel, "aligning")
+                    _reset_peak_cuda_memory()
                     align_model, metadata = self.whisperx.load_align_model(language_code=language, device=request.device)
-                    _control_checkpoint(cancel, "aligning")
-                    aligned = self.whisperx.align(segments, align_model, metadata, request.audio_path, request.device)
-                    _control_checkpoint(cancel, "aligning")
-                    aligned_segments = aligned.get("segments", segments)
+                    try:
+                        _control_checkpoint(cancel, "aligning")
+                        aligned = self.whisperx.align(segments, align_model, metadata, request.audio_path, request.device)
+                        _control_checkpoint(cancel, "aligning")
+                        aligned_segments = aligned.get("segments", segments)
+                    finally:
+                        _log_peak_cuda_memory("alignment")
+                        del align_model
+                        del metadata
+                        release_cuda_resources()
                 word_timings = []
                 for segment in aligned_segments:
                     word_timings.extend(segment.get("words", []) or [])
@@ -301,19 +393,38 @@ class WhisperXEngine:
             except TranscriptionCanceled:
                 logger.info("WhisperX transcription canceled for job %s.", request.job_id, exc_info=True)
                 raise
+            except GpuOutOfMemoryError:
+                logger.exception("WhisperX exhausted CUDA memory for job %s.", request.job_id)
+                raise
             except Exception as exc:
                 logger.exception("WhisperX transcription failed for job %s.", request.job_id)
                 raise TranscriptionFailed(str(exc)) from exc
 
-    def _configure_gpu(self, gpu_id: str | None) -> None:
-        if gpu_id is None or gpu_id == "":
-            return
-        normalized = str(gpu_id)
+    def _configure_gpu(self, gpu_id: str | None) -> int:
+        explicit_selection = gpu_id is not None and gpu_id != ""
+        normalized = str(gpu_id) if explicit_selection else (self._configured_gpu_id or "0")
+        try:
+            device_index = int(normalized)
+        except ValueError as exc:
+            raise GpuUnavailableError(f"GPU id không hợp lệ: {normalized}") from exc
+        if device_index < 0:
+            raise GpuUnavailableError(f"GPU id không hợp lệ: {normalized}")
         if self._configured_gpu_id is not None and self._configured_gpu_id != normalized:
             raise GpuUnavailableError(
                 "GPU đã thay đổi sau khi runtime CUDA được khởi tạo; hãy khởi động lại ứng dụng"
             )
         if self._configured_gpu_id is None:
-            os.environ["CUDA_VISIBLE_DEVICES"] = normalized
+            if explicit_selection:
+                try:
+                    import torch  # type: ignore
+
+                    if not torch.cuda.is_available() or device_index >= int(torch.cuda.device_count()):
+                        raise GpuUnavailableError(f"Torch CUDA không tìm thấy GPU index {device_index}")
+                    torch.cuda.set_device(device_index)
+                except GpuUnavailableError:
+                    raise
+                except Exception as exc:
+                    raise GpuUnavailableError(f"Không thể chọn GPU index {device_index}: {exc}") from exc
             self._configured_gpu_id = normalized
-            logger.info("Configured CUDA_VISIBLE_DEVICES=%s for the STT runtime.", normalized)
+            logger.info("Configured Torch/WhisperX CUDA device_index=%d.", device_index)
+        return device_index

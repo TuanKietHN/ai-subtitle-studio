@@ -13,6 +13,7 @@
     "install_scope",
     "installed_size_bytes",
     "temporary_space_bytes",
+    "runtime_bundle_id",
     "artifacts"
   ],
   "properties": {
@@ -98,6 +99,10 @@
     "temporary_space_bytes": {
       "type": "integer",
       "minimum": 1
+    },
+    "runtime_bundle_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
     },
     "artifacts": {
       "type": "array",

@@ -29,6 +29,10 @@ if (-not (Test-Path -LiteralPath $ChecksumsPath -PathType Leaf)) {
     throw "Missing checksum file: $ChecksumsPath"
 }
 $Manifest = Get-Content -Raw $ManifestPath | ConvertFrom-Json
+if ([string]$Manifest.runtime_bundle_id -notmatch '^[0-9a-f]{64}$') {
+    throw 'Manifest runtime_bundle_id is missing or invalid.'
+}
+Write-Host "Runtime bundle identity verified: $($Manifest.runtime_bundle_id)"
 $ExpectedChecksumNames = @(
     @($Manifest.artifacts | ForEach-Object { $_.name })
     (Split-Path -Leaf $ManifestPath)

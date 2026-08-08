@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -14,6 +15,38 @@ RUNTIME_VOLUME_LIMIT_BYTES = 19 * 1024 * 1024 * 100
 
 class ReleaseVerificationError(RuntimeError):
     """Raised when release assets do not satisfy the published contract."""
+
+
+def compute_runtime_bundle_id(manifest: dict[str, Any]) -> str:
+    release = manifest.get("release")
+    if not isinstance(release, dict):
+        raise ReleaseVerificationError("Manifest release identity is missing")
+    fields = (
+        "app_version",
+        "git_commit",
+        "python_version",
+        "platform",
+        "whisperx_version",
+        "torch_version",
+        "cuda_runtime_version",
+        "pyinstaller_version",
+        "dependency_manifest_sha256",
+    )
+    lines = [f"{field}={release.get(field, '')}" for field in fields]
+    volumes = sorted(
+        (item for item in manifest.get("artifacts", []) if item.get("kind") == "runtime_volume"),
+        key=lambda item: int(item.get("volume_index", 0)),
+    )
+    for volume in volumes:
+        lines.append(
+            "volume={}|{}|{}|{}".format(
+                int(volume.get("volume_index", 0)),
+                volume.get("name", ""),
+                int(volume.get("size_bytes", 0)),
+                str(volume.get("sha256", "")).lower(),
+            )
+        )
+    return hashlib.sha256("\n".join(lines).encode("utf-8")).hexdigest()
 
 
 def sha256_file(path: Path, chunk_size: int = 8 * 1024 * 1024) -> str:
@@ -41,6 +74,9 @@ def verify_release_directory(
     artifacts = manifest.get("artifacts")
     if not isinstance(artifacts, list) or not artifacts:
         raise ReleaseVerificationError("Manifest does not contain any artifacts")
+    runtime_bundle_id = str(manifest.get("runtime_bundle_id") or "")
+    if not re.fullmatch(r"[0-9a-f]{64}", runtime_bundle_id):
+        raise ReleaseVerificationError("Manifest runtime_bundle_id is missing or invalid")
 
     verified: list[Path] = []
     volume_indexes: list[int] = []
@@ -73,6 +109,9 @@ def verify_release_directory(
             raise ReleaseVerificationError(
                 f"Runtime volume indexes must be contiguous: expected {expected}, got {sorted(volume_indexes)}"
             )
+    expected_bundle_id = compute_runtime_bundle_id(manifest)
+    if runtime_bundle_id != expected_bundle_id:
+        raise ReleaseVerificationError("runtime_bundle_id does not match release identity and ordered volumes")
     return verified
 
 

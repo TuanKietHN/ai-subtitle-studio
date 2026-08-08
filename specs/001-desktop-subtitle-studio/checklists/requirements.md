@@ -32,5 +32,7 @@
 ## Notes
 
 - Validation iteration 1 passed.
+- Validation iteration 2 passed after adding US6, FR-049–FR-062 and SC-014–SC-020 for RC5 installer delivery, resumable downloads, selective uninstall and NVIDIA 4 GiB compatibility.
 - No clarification markers remain; reasonable defaults are documented in Assumptions.
 - WhisperX, VAD, Google Translate, DeepSeek and Subtitle Edit are retained because they are user-visible or constitution-mandated product constraints for this project.
+- Windows resumable transfer and SHA-256 are retained as explicit release constraints because interrupted multi-gigabyte delivery and artifact integrity are user-visible acceptance requirements; implementation-specific lifecycle details remain in `plan.md` and contracts.

@@ -47,7 +47,7 @@ AI-Subtitle-Studio-Setup-vX.Y.Z.exe
 Ví dụ:
 
 ```text
-AI-Subtitle-Studio-Setup-v0.1.0-rc.4.exe
+AI-Subtitle-Studio-Setup-v0.1.0-rc.5.exe
 ```
 
 Đây là **online installer**, nghĩa là một trình cài đặt nhỏ có nhiệm vụ:
@@ -60,6 +60,46 @@ AI-Subtitle-Studio-Setup-v0.1.0-rc.4.exe
 6. Cho phép gỡ cài đặt sau này.
 
 Người dùng không phải tự cài Python, dependency, FFmpeg, 7-Zip hay Inno Setup.
+
+### Nếu mạng chậm hoặc bị ngắt thì sao?
+
+Setup RC5 thử theo thứ tự rất dễ hiểu:
+
+1. Tìm các file runtime đặt cạnh `Setup.exe`.
+2. Nếu không có, tìm bản đã tải và xác minh trong cache của máy.
+3. Nếu vẫn thiếu, dùng Windows BITS để tải; BITS có thể tiếp tục phần đang dở.
+4. Nếu BITS không dùng được, chuyển sang HTTPS của Inno Setup.
+5. Dù file đến từ đâu, Setup vẫn kiểm tra SHA-256 trước khi giải nén.
+
+Cache nằm trong:
+
+```text
+%LOCALAPPDATA%\AI Subtitle Studio\installer-cache\<runtime_bundle_id>
+```
+
+Nếu người dùng bấm hủy hoặc mạng rớt, phần BITS hợp lệ được giữ để lần sau không
+phải tải lại từ 0%. Một file cache thiếu metadata, sai kích thước hoặc sai
+SHA-256 sẽ bị bỏ; Setup không bao giờ kích hoạt runtime chưa xác minh.
+
+`runtime_bundle_id` là “dấu vân tay” của toàn bộ Python, dependency, FFmpeg,
+build identity và các volume runtime. Khi chạy lại đúng installer/bundle đã có,
+Setup có thể dùng lại runtime đã cài và không tải nhiều gigabyte lần nữa.
+
+### Người dùng gỡ ứng dụng như thế nào?
+
+Người dùng có thể mở Start Menu và chọn **Gỡ cài đặt AI Subtitle Studio**, hoặc
+vào **Settings > Apps > Installed apps** của Windows.
+
+Mặc định, trình gỡ chỉ xóa chương trình và shortcut. Hai ô sau đều **không được
+chọn sẵn**:
+
+- `Xóa model, cache, log, lịch sử và API key`.
+- `Xóa phụ đề/output đã tạo`.
+
+Nếu chọn xóa output, chương trình hiện đúng đường dẫn và hỏi lại lần thứ hai.
+Cleanup helper chỉ xóa các file `.srt` mà database ghi nhận là do ứng dụng tạo;
+video nguồn và file không thuộc ứng dụng được giữ lại. Nếu một file không xóa
+được, báo cáo JSON được ghi ra thay vì giả vờ rằng mọi thứ đã thành công.
 
 Tuy nhiên, GitHub Release vẫn phải chứa đầy đủ các file phía sau:
 
@@ -111,7 +151,10 @@ upload vào **GitHub Release**, không được commit vào lịch sử Git.
 
 ## 4. Chọn repository public hay private
 
-Đây là lựa chọn quan trọng.
+Đây là lựa chọn quan trọng. Repository của dự án hiện đã là **Public** để người
+dùng tải Setup và runtime mà không cần đăng nhập GitHub. Dự án hiện chưa có file
+`LICENSE`, vì vậy public chỉ có nghĩa là mọi người xem được source; không đồng
+nghĩa với việc source đã là mã nguồn mở hoặc được phép tái sử dụng.
 
 ### Chọn Public nếu
 
@@ -169,7 +212,7 @@ Trong các ví dụ bên dưới, hãy thay:
 Khai báo ba giá trị để các lệnh phía sau dễ đọc:
 
 ```powershell
-$version = "0.1.0-rc.4"
+$version = "0.1.0-rc.5"
 $owner = "TEN_GITHUB_CUA_BAN"
 $repository = "ai-subtitle-studio"
 ```
@@ -300,7 +343,8 @@ Trước khi build Release chính thức, trạng thái Git nên sạch.
 6. Chọn **Public** nếu muốn người dùng bình thường cài bằng online installer.
 7. Không chọn **Add a README file**.
 8. Không chọn thêm `.gitignore`.
-9. Không chọn thêm license tại đây vì dự án đã quản lý các file của nó.
+9. Không chọn license tùy ý trên GitHub. Dự án hiện chưa có `LICENSE`; chỉ thêm
+   license sau khi chủ sở hữu tự quyết định rõ quyền sử dụng source.
 10. Bấm **Create repository**.
 
 Lý do không tạo README hoặc `.gitignore` trên GitHub: repository local đã có
@@ -398,7 +442,7 @@ $repository
 Nếu PowerShell đã được đóng và mở lại, khai báo lại:
 
 ```powershell
-$version = "0.1.0-rc.4"
+$version = "0.1.0-rc.5"
 $owner = "TEN_GITHUB_CUA_BAN"
 $repository = "ai-subtitle-studio"
 ```
@@ -527,7 +571,7 @@ git push origin "v$version"
 Ví dụ tag thực tế:
 
 ```text
-v0.1.0-rc.4
+v0.1.0-rc.5
 ```
 
 ### Nếu Git báo tag đã tồn tại
@@ -545,13 +589,13 @@ Hai lệnh cuối phải trả về cùng mã commit nếu tag thuộc đúng ph
 Nếu tag đã được công bố nhưng trỏ sai, cách an toàn là tăng version, ví dụ từ:
 
 ```text
-0.1.0-rc.4
+0.1.0-rc.5
 ```
 
 thành:
 
 ```text
-0.1.0-rc.5
+0.1.0-rc.6
 ```
 
 Sau đó commit, build và tạo tag mới. Không tái sử dụng một tag đã phát hành vì
@@ -565,11 +609,11 @@ người dùng có thể tải nhầm asset cũ và gặp lỗi hash.
 2. Ở bên phải danh sách file, bấm **Releases**.
 3. Bấm **Draft a new release**.
 4. Bấm **Choose a tag**.
-5. Chọn tag `v0.1.0-rc.4`, hoặc tag đúng với `$version`.
+5. Chọn tag `v0.1.0-rc.5`, hoặc tag đúng với `$version`.
 6. Nhập tiêu đề:
 
    ```text
-   AI Subtitle Studio v0.1.0-rc.4
+   AI Subtitle Studio v0.1.0-rc.5
    ```
 
 7. Trong phần mô tả, có thể viết:
@@ -577,28 +621,33 @@ người dùng có thể tải nhầm asset cũ và gặp lỗi hash.
    ```markdown
    ## Có gì trong phiên bản này?
 
-   - Bản thử nghiệm đầu tiên dành cho Windows 10/11 x64.
-   - Người dùng chỉ cần tải file Setup EXE.
-   - Setup sẽ tự tải Python runtime, dependency và FFmpeg.
+   - Sửa lỗi RC4 tải/giải nén xong nhưng không kích hoạt được runtime khi cài mới.
+   - Setup có cache, BITS resume, HTTPS fallback, SHA-256 và rollback an toàn.
+   - Thêm profile GPU 4 GiB cho card như RTX 2050: `small.en`,
+     `int8_float16`, batch 1 và cảnh báo VRAM rõ ràng.
+   - Thêm shortcut gỡ cài đặt và hai lựa chọn xóa dữ liệu đều tắt mặc định.
 
    ## Cách cài
 
-   1. Tải AI-Subtitle-Studio-Setup-v0.1.0-rc.4.exe.
+   1. Tải AI-Subtitle-Studio-Setup-v0.1.0-rc.5.exe.
    2. Mở file vừa tải.
    3. Làm theo hướng dẫn trên màn hình.
 
    ## Lưu ý
 
    - Cần Internet trong lúc cài đặt.
-   - Đây là pre-release và có thể còn lỗi.
+   - Đây là pre-release; acceptance trên RTX 2050/4 GiB thật và máy Windows
+     sạch vẫn là gate thủ công chưa hoàn tất.
    - Installer chưa ký có thể hiện cảnh báo Windows SmartScreen.
+   - Model Whisper được tải ở lần dùng đầu, không nằm trong Setup.
+   - Gỡ cài đặt mặc định giữ model, lịch sử, API key và phụ đề.
    ```
 
 8. Với version có `rc`, `alpha` hoặc `beta`, chọn **Set as a pre-release**.
 9. Không chọn nó là bản latest ổn định.
 10. Kéo **toàn bộ file của đúng version hiện tại** vào khu vực upload asset.
-    Ví dụ với RC.4, chỉ chọn các file có `v0.1.0-rc.4` trong tên; không kéo các
-    file RC.3 đang được giữ lại trong cùng thư mục.
+    Ví dụ với RC.5, chỉ chọn các file có `v0.1.0-rc.5` trong tên; không kéo các
+    file RC.4 đang được giữ lại trong cùng thư mục.
 11. Chờ đến khi tất cả thanh upload hoàn thành.
 12. Kiểm tra không có file nào từ 2 GiB trở lên.
 13. Bấm **Save draft** trước để kiểm tra.
@@ -611,6 +660,15 @@ Trong draft phải thấy:
 - SHA256SUMS.
 - SBOM.
 - Third-party notices.
+
+Mở `release-manifest-v0.1.0-rc.5.json` và kiểm tra có trường
+`runtime_bundle_id` gồm 64 ký tự hex thường (`0-9`, `a-f`). Setup, manifest và
+runtime marker phải dùng cùng giá trị này.
+
+Kiểm tra thêm `release.git_commit`. Nếu giá trị là `uncommitted`, đây chỉ là
+build thử từ working tree chưa commit: verifier vẫn có thể xác nhận file/hash,
+nhưng **không được upload**. Hãy commit mã nguồn RC5, build sạch lại từ commit
+đó, rồi chỉ upload khi `git_commit` là SHA 40 ký tự của chính commit được tag.
 
 Khi đã đủ file, bấm **Publish release**.
 
@@ -645,7 +703,7 @@ Nếu ứng dụng vẫn chạy, bộ cài đã thực hiện đúng nhiệm v�
 Tải tất cả asset bằng trình duyệt vào một thư mục riêng, ví dụ:
 
 ```text
-C:\Temp\ai-subtitle-studio-v0.1.0-rc.4
+C:\Temp\ai-subtitle-studio-v0.1.0-rc.5
 ```
 
 Sau đó chạy:
@@ -653,7 +711,7 @@ Sau đó chạy:
 ```powershell
 .\scripts\verify-release.ps1 `
   -Version $version `
-  -ReleaseDirectory "C:\Temp\ai-subtitle-studio-v0.1.0-rc.4"
+  -ReleaseDirectory "C:\Temp\ai-subtitle-studio-v0.1.0-rc.5"
 ```
 
 Script kiểm tra:
@@ -681,6 +739,11 @@ Với pre-release, tối thiểu cần kiểm tra:
 - Kiểm tra Google Translation và DeepSeek bằng credential test riêng.
 - Kiểm tra xuất subtitle.
 - Gỡ cài đặt rồi cài lại.
+- Gỡ mặc định và xác nhận model, API key, lịch sử, output vẫn còn.
+- Thử từng lựa chọn cleanup và xác nhận video nguồn không bị xóa.
+- Trên RTX 2050/4 GiB: chọn profile `GPU 4 GiB`, model `small.en`, xác nhận UI
+  hiển thị Torch CUDA sẵn sàng, `int8_float16`, batch 1 và chạy hai video liên
+  tiếp. Không dùng thành công của `nvidia-smi` thay cho Torch CUDA readiness.
 - Kiểm tra installer chưa ký có cảnh báo SmartScreen hay không.
 
 Chỉ đánh dấu stable/latest khi mọi stable gate trong
@@ -708,8 +771,8 @@ Quy trình cho version mới:
 11. Upload toàn bộ asset.
 12. Publish và kiểm tra trên máy sạch.
 
-Không trộn asset của hai version. Không lấy Setup của `rc.3` ghép với runtime
-của `rc.4`.
+Không trộn asset của hai version. Không lấy Setup của `rc.4` ghép với runtime
+của `rc.5`.
 
 ---
 

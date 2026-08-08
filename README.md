@@ -2,16 +2,18 @@
 
 AI Subtitle Studio là ứng dụng desktop Windows dùng Python + PySide6 để tạo phụ đề tiếng Anh từ video `.mp4` bằng WhisperX, dịch sang tiếng Việt qua Google Cloud Translation API v3 hoặc DeepSeek, chỉnh sửa phụ đề và xuất file `.srt`.
 
-> Phiên bản phát hành hiện tại: `v0.1.0-rc.4`. Đây là pre-release chưa ký số;
-> chỉ tải executable từ trang GitHub Releases chính thức sau khi chủ sở hữu
-> công bố bản phát hành.
+> Phiên bản đang được chuẩn bị từ mã nguồn hiện tại: `v0.1.0-rc.5`. Đây là
+> pre-release chưa ký số; chỉ tải executable từ trang GitHub Releases chính
+> thức sau khi chủ sở hữu công bố bản phát hành. RC4 có lỗi kích hoạt runtime
+> khi cài mới và không nên tiếp tục phân phối.
 
 ## Repository và giấy phép
 
-Repository được giữ **private** theo mặc định trong giai đoạn release candidate.
-Chỉ chuyển public sau khi chủ sở hữu chọn source **license**, hoàn tất
-third-party notices và kiểm tra không có dữ liệu người dùng/credential trong
-history. Khi chưa có `LICENSE`, không được mặc định hiểu source là open source.
+Repository hiện được công khai để người dùng phổ thông có thể tải asset từ
+GitHub Release mà không đăng nhập. Dự án hiện **chưa có file `LICENSE`**: mã
+nguồn có thể xem được nhưng không được mặc định hiểu là open source hay được tự
+do sao chép/phân phối. Chủ sở hữu cần chọn license rõ ràng trước khi mời đóng
+góp hoặc quảng bá quyền sử dụng mã nguồn.
 
 Binary chính thức sau này chỉ được tải từ trang GitHub Releases của repository.
 Bản stable phải có SHA-256 và chữ ký Authenticode; bản chưa ký chỉ được phát
@@ -21,7 +23,12 @@ hành dưới dạng pre-release.
 
 - Windows 10/11.
 - Python 3.11 khuyến nghị.
-- NVIDIA GPU + driver tương thích CUDA 12.8+ nếu chạy STT thật bằng WhisperX trên RTX 50 series/Blackwell trở lên.
+- NVIDIA GPU có thể khởi tạo bằng Torch CUDA và driver tương thích CUDA 12.8+
+  nếu chạy STT thật bằng WhisperX. GPU khoảng 4 GiB như RTX 2050 dùng profile
+  `GPU 4 GiB`, model `small.en`/`small`, `int8_float16` và batch 1; model
+  `large-v3` vẫn là mặc định cho GPU mạnh hơn. Profile này đã có kiểm thử tự
+  động nhưng vẫn cần acceptance trên RTX 2050/4 GiB thật trước khi được coi là
+  đã xác nhận đầy đủ cho mọi máy.
 - Bản source cần `ffmpeg` để trích audio; installer chính thức sẽ bundle bản đã
   pin và kiểm checksum.
 - Subtitle Edit nếu muốn mở file `.srt` bằng Subtitle Edit.

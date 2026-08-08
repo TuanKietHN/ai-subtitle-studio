@@ -87,7 +87,10 @@ def test_release_naming_is_versioned_and_repository_setup_documents_gates():
     setup = (ROOT / "docs" / "GITHUB_SETUP.md").read_text(encoding="utf-8")
     assert "${{ steps.identity.outputs.tag }}" in release_workflow
     for required in (
-        "private repository",
+        "repository đã tồn tại",
+        "public repository",
+        "hiện chưa có",
+        "`LICENSE`",
         "branch ruleset",
         "ai-subtitle-release",
         "windows-release",

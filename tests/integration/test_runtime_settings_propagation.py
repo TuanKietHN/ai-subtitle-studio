@@ -28,12 +28,18 @@ def test_runner_propagates_model_cache_and_selected_gpu(tmp_path):
         output_dir=tmp_path / "outputs",
         model_cache_dir=tmp_path / "models",
         selected_gpu_id="2",
+        compute_type="int8_float16",
+        batch_size=1,
+        execution_profile_id="low-vram-4gb",
     )
 
     runner.process_job(VideoJob(str(source)), WorkerControlToken())
 
     assert stt.request.model_cache_dir == str(tmp_path / "models")
     assert stt.request.gpu_id == "2"
+    assert stt.request.compute_type == "int8_float16"
+    assert stt.request.batch_size == 1
+    assert stt.request.execution_profile_id == "low-vram-4gb"
 
 
 def test_job_gpu_override_wins_over_runtime_setting(tmp_path):

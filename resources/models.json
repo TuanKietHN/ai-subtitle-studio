@@ -2,32 +2,52 @@
   "default_model": "large-v3",
   "models": [
     {
+      "id": "small.en",
+      "display_name": "Small English",
+      "description": "English-only low-VRAM model recommended for NVIDIA GPUs with 4 GiB VRAM.",
+      "enabled": true,
+      "recommended_vram_gb": 4,
+      "execution_profile_ids": ["default", "low-vram-4gb"]
+    },
+    {
+      "id": "small",
+      "display_name": "Small Multilingual",
+      "description": "Multilingual low-VRAM model for NVIDIA GPUs with 4 GiB VRAM.",
+      "enabled": true,
+      "recommended_vram_gb": 4,
+      "execution_profile_ids": ["default", "low-vram-4gb"]
+    },
+    {
       "id": "large-v3",
       "display_name": "Large v3",
       "description": "Default high-quality Whisper model for English lectures.",
       "enabled": true,
-      "recommended_vram_gb": 10
+      "recommended_vram_gb": 10,
+      "execution_profile_ids": ["default"]
     },
     {
       "id": "medium",
       "display_name": "Medium",
       "description": "Lower VRAM option with faster processing.",
       "enabled": true,
-      "recommended_vram_gb": 5
+      "recommended_vram_gb": 5,
+      "execution_profile_ids": ["default"]
     },
     {
       "id": "large-v3-turbo",
       "display_name": "Large v3 Turbo",
       "description": "Faster large-v3 family model when available.",
       "enabled": true,
-      "recommended_vram_gb": 8
+      "recommended_vram_gb": 8,
+      "execution_profile_ids": ["default"]
     },
     {
       "id": "distil-large-v3",
       "display_name": "Distil Large v3",
       "description": "Distilled large-v3 model for speed-oriented workflows.",
       "enabled": true,
-      "recommended_vram_gb": 6
+      "recommended_vram_gb": 6,
+      "execution_profile_ids": ["default"]
     }
   ]
 }

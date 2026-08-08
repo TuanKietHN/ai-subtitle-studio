@@ -27,6 +27,7 @@ ERROR_MESSAGES = {
     "audio": "Không trích được audio. Hãy kiểm tra đường dẫn ffmpeg và file video đầu vào.",
     "stt": "Nhận dạng giọng nói thất bại. Hãy kiểm tra CUDA/GPU và cài đặt WhisperX.",
     "gpu": "Không phát hiện NVIDIA/CUDA GPU hợp lệ để chạy nhận dạng.",
+    "gpu_out_of_memory": "GPU không đủ VRAM để hoàn tất nhận dạng. Hãy chọn profile/model nhẹ hơn.",
     "model": "Model Whisper đã chọn chưa sẵn sàng hoặc tải xuống thất bại.",
     "translation": "Provider dịch thất bại. Hãy kiểm tra cài đặt provider và API key.",
     "output": "Không ghi được file phụ đề đầu ra.",
@@ -113,6 +114,7 @@ class WhisperModel:
     enabled: bool = True
     description: str = ""
     recommended_vram_gb: float | None = None
+    execution_profile_ids: list[str] = field(default_factory=list)
 
 
 @dataclass(slots=True)
@@ -147,6 +149,20 @@ class AppSettings:
     default_output_dir: str | None = None
     last_model_id: str = "large-v3"
     last_translation_provider_id: str | None = None
+    last_compute_profile_id: str = "default"
+
+
+@dataclass(slots=True)
+class GpuCapabilitySnapshot:
+    gpu_id: str
+    name: str
+    driver_version: str
+    total_vram_bytes: int = 0
+    free_vram_bytes: int = 0
+    compute_capability: str | None = None
+    torch_cuda_ready: bool = False
+    torch_cuda_error: str | None = None
+    supported_compute_types: list[str] = field(default_factory=list)
 
 
 @dataclass(slots=True)
@@ -156,9 +172,15 @@ class SystemInfoSnapshot:
     faster_whisper_version: str
     torch_cuda_version: str
     gpu_driver_version: str
-    detected_gpus: list[dict[str, Any]]
+    detected_gpus: list[GpuCapabilitySnapshot]
     selected_model_id: str
     downloaded_models_size_bytes: int
+    torch_cuda_ready: bool = False
+    torch_cuda_error: str | None = None
+    selected_gpu_id: str | None = None
+    effective_profile_id: str | None = None
+    effective_compute_type: str | None = None
+    effective_batch_size: int | None = None
     ffmpeg_path: str | None = None
     data_dir: str | None = None
     log_dir: str | None = None

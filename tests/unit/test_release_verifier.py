@@ -3,12 +3,27 @@ import json
 
 import pytest
 
-from ai_subtitle_studio.release_verifier import ReleaseVerificationError, verify_release_directory
+from ai_subtitle_studio.release_verifier import (
+    ReleaseVerificationError,
+    compute_runtime_bundle_id,
+    verify_release_directory,
+)
 
 
 def _manifest_for(path, *, size=None, digest=None, index=1):
     data = path.read_bytes() if path.exists() else b""
-    return {
+    manifest = {
+        "release": {
+            "app_version": "0.1.0-rc.5",
+            "git_commit": "a" * 40,
+            "python_version": "3.13.7",
+            "platform": "windows-x64",
+            "whisperx_version": "3.8.6",
+            "torch_version": "2.8.0+cu128",
+            "cuda_runtime_version": "12.8",
+            "pyinstaller_version": "6.21.0",
+            "dependency_manifest_sha256": "b" * 64,
+        },
         "artifacts": [
             {
                 "name": path.name,
@@ -19,6 +34,8 @@ def _manifest_for(path, *, size=None, digest=None, index=1):
             }
         ]
     }
+    manifest["runtime_bundle_id"] = compute_runtime_bundle_id(manifest)
+    return manifest
 
 
 def _write_manifest(tmp_path, manifest):
@@ -67,4 +84,15 @@ def test_release_verifier_rejects_non_contiguous_volume_indexes(tmp_path):
     asset.write_bytes(b"valid")
     manifest = _write_manifest(tmp_path, _manifest_for(asset, index=2))
     with pytest.raises(ReleaseVerificationError, match="contiguous"):
+        verify_release_directory(tmp_path, manifest)
+
+
+def test_release_verifier_rejects_wrong_runtime_bundle_identity(tmp_path):
+    asset = tmp_path / "runtime.7z.001"
+    asset.write_bytes(b"valid")
+    data = _manifest_for(asset)
+    data["runtime_bundle_id"] = "0" * 64
+    manifest = _write_manifest(tmp_path, data)
+
+    with pytest.raises(ReleaseVerificationError, match="runtime_bundle_id"):
         verify_release_directory(tmp_path, manifest)

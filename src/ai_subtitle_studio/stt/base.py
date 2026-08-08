@@ -12,6 +12,8 @@ class TranscriptionRequest:
     model_id: str
     device: str = "cuda"
     compute_type: str = "float16"
+    batch_size: int = 16
+    execution_profile_id: str = "default"
     model_cache_dir: str | None = None
     gpu_id: str | None = None
     language_hint: str = "en"
@@ -34,6 +36,7 @@ class STTEngine(Protocol):
 
 class STTError(RuntimeError): pass
 class GpuUnavailableError(STTError): pass
+class GpuOutOfMemoryError(STTError): pass
 class ModelUnavailableError(STTError): pass
 class AudioReadError(STTError): pass
 class TranscriptionCanceled(STTError): pass

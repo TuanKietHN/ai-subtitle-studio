@@ -6,7 +6,7 @@ from ai_subtitle_studio.domain.entities import VideoJob
 from ai_subtitle_studio.domain.job_state import JobStatus
 from ai_subtitle_studio.config.model_catalog import ModelCatalog
 from ai_subtitle_studio.io.audio_extractor import AudioExtractionCanceled
-from ai_subtitle_studio.stt.base import TranscriptionCanceled, TranscriptionResult
+from ai_subtitle_studio.stt.base import GpuOutOfMemoryError, TranscriptionCanceled, TranscriptionResult
 from ai_subtitle_studio.ui.main_window import MainWindowController
 from ai_subtitle_studio.workers.job_runner import JobRunner
 from ai_subtitle_studio.workers.worker_events import WorkerControlToken
@@ -31,6 +31,11 @@ class FailingSTT:
         raise RuntimeError("worker stt exploded")
 
 
+class OutOfMemorySTT:
+    def transcribe(self, request, progress=None, cancel=None):
+        raise GpuOutOfMemoryError("CUDA out of memory after one bounded retry")
+
+
 def test_job_runner_processes_sequentially_and_writes_english_srt(tmp_path):
     v1 = tmp_path / "one.mp4"; v1.write_bytes(b"1")
     v2 = tmp_path / "two.mp4"; v2.write_bytes(b"2")
@@ -53,6 +58,21 @@ def test_job_runner_logs_worker_exception_traceback_before_failure(tmp_path, cap
     result = runner.process_job(job, WorkerControlToken())
     assert result.status == JobStatus.FAILED
     assert any(record.exc_info and f"Worker job {job.id} failed" in record.message for record in caplog.records)
+
+
+def test_job_runner_exposes_stable_gpu_out_of_memory_error(tmp_path):
+    video = tmp_path / "four-gib.mp4"
+    video.write_bytes(b"1")
+    job = VideoJob(str(video))
+    runner = JobRunner(audio_extractor=FakeAudioExtractor(), stt_engine=OutOfMemorySTT(), output_dir=tmp_path)
+
+    result = runner.process_job(job, WorkerControlToken())
+
+    assert result.status == JobStatus.FAILED
+    assert result.error_code == "gpu_out_of_memory"
+    assert "không đủ VRAM" in result.error_message
+    error_events = [event for event in runner.events if event.event_type == "job.error"]
+    assert error_events[-1].payload["error_code"] == "gpu_out_of_memory"
 
 
 

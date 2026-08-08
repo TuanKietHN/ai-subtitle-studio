@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Iterable
 
 from ai_subtitle_studio.config.app_settings import AppSettingsStore
+from ai_subtitle_studio.config.gpu_profiles import GpuProfileError, configured_execution_profile, resolve_execution_profile
 from ai_subtitle_studio.config.system_info import SystemInfoProvider
 from ai_subtitle_studio.domain.entities import AppSettings, SubtitleLine, VideoJob
 from ai_subtitle_studio.domain.job_state import ACTIVE_STATUSES, JobStatus
@@ -149,6 +150,26 @@ class MainWindowController:
     def select_model(self, model_id: str) -> None:
         self.selected_model_id = self._resolve_model_id(model_id)
         self._save_last_choices()
+
+    def model_compatibility_warning(self, model_id: str) -> str | None:
+        if not self.system_info_provider or not self.model_catalog:
+            return None
+        settings = self.settings_store.load() if self.settings_store else self.settings
+        snapshot = self.system_info_provider.collect(selected_gpu_id=settings.selected_gpu_id)
+        gpu = next(
+            (item for item in snapshot.detected_gpus if item.gpu_id == settings.selected_gpu_id),
+            snapshot.detected_gpus[0] if snapshot.detected_gpus else None,
+        )
+        if gpu is None or not gpu.total_vram_bytes:
+            return None
+        model = self.model_catalog.get(model_id)
+        available_gib = gpu.total_vram_bytes / float(1024**3)
+        if model.recommended_vram_gb and model.recommended_vram_gb > available_gib:
+            return (
+                f"{model.display_name} khuyến nghị {model.recommended_vram_gb:g} GiB VRAM, "
+                f"nhưng GPU đang chọn có {available_gib:.1f} GiB. Model này có thể gây CUDA OOM."
+            )
+        return None
 
     def add_files(self, paths) -> object:
         result = self.queue_service.add_files(paths, selected_model_id=self.selected_model_id)
@@ -300,6 +321,7 @@ class MainWindowController:
             credential_store=self.credential_store,
             working_dir=working_dir,
             protected_job_ids=lambda: {job_id} if (job_id := self.running_job_id()) else set(),
+            system_info_provider=self.system_info_provider,
         )
 
     def apply_settings(self, settings: AppSettings) -> None:
@@ -319,9 +341,42 @@ class MainWindowController:
         if audio_extractor and settings.ffmpeg_path:
             audio_extractor.ffmpeg_path = settings.ffmpeg_path
         if self.job_runner and hasattr(self.job_runner, "set_runtime_settings"):
+            try:
+                configured_profile = configured_execution_profile(
+                    requested_model_id=settings.last_model_id,
+                    requested_profile_id=settings.last_compute_profile_id,
+                )
+            except GpuProfileError as exc:
+                logger.warning("Invalid persisted GPU profile after settings update: %s", exc)
+                configured_profile = configured_execution_profile(requested_model_id=settings.last_model_id)
+            compute_type = configured_profile.compute_type
+            batch_size = configured_profile.batch_size
+            profile_id = configured_profile.profile_id
+            if self.system_info_provider:
+                snapshot = self.system_info_provider.collect(selected_gpu_id=settings.selected_gpu_id)
+                ready_gpus = [gpu for gpu in snapshot.detected_gpus if gpu.torch_cuda_ready]
+                gpu = next(
+                    (item for item in ready_gpus if item.gpu_id == settings.selected_gpu_id),
+                    ready_gpus[0] if ready_gpus else None,
+                )
+                if gpu is not None:
+                    try:
+                        profile = resolve_execution_profile(
+                            gpu,
+                            requested_model_id=settings.last_model_id,
+                            requested_profile_id=settings.last_compute_profile_id,
+                        )
+                        compute_type = profile.compute_type
+                        batch_size = profile.batch_size
+                        profile_id = profile.profile_id
+                    except GpuProfileError as exc:
+                        logger.warning("GPU profile remains unavailable after settings update: %s", exc)
             self.job_runner.set_runtime_settings(
                 model_cache_dir=settings.model_cache_dir,
                 selected_gpu_id=settings.selected_gpu_id,
+                compute_type=compute_type,
+                batch_size=batch_size,
+                execution_profile_id=profile_id,
             )
 
     def logs_directory(self) -> str | None:
@@ -345,6 +400,10 @@ class MainWindowController:
         return AboutController(self.system_info_provider).render_info(
             selected_model_id=self.selected_model_id,
             model_cache_dir=settings.model_cache_dir,
+            selected_gpu_id=settings.selected_gpu_id,
+            effective_profile_id=getattr(self.job_runner, "execution_profile_id", None),
+            effective_compute_type=getattr(self.job_runner, "compute_type", None),
+            effective_batch_size=getattr(self.job_runner, "batch_size", None),
         )
 
     def drain_worker_events(self):
@@ -683,7 +742,10 @@ class MainWindow(QMainWindow):
         self.info_labels["whisperx_version"].setText(snapshot.whisperx_version)
         self.info_labels["faster_whisper_version"].setText(snapshot.faster_whisper_version)
         self.info_labels["cuda"].setText(snapshot.torch_cuda_version)
-        gpu_text = ", ".join(f"{gpu.get('id')}: {gpu.get('name')} ({gpu.get('driver_version')})" for gpu in snapshot.detected_gpus)
+        gpu_text = ", ".join(
+            f"{gpu.gpu_id}: {gpu.name} ({gpu.total_vram_bytes / float(1024**3):.1f} GiB, {gpu.driver_version})"
+            for gpu in snapshot.detected_gpus
+        )
         self.info_labels["gpu"].setText(gpu_text or f"không khả dụng / driver {snapshot.gpu_driver_version}")
         self.info_labels["selected_model"].setText(snapshot.selected_model_id)
         self.info_labels["downloaded_size"].setText(self._format_bytes(snapshot.downloaded_models_size_bytes))
@@ -873,6 +935,20 @@ class MainWindow(QMainWindow):
     def _model_changed(self) -> None:
         model_id = self.model_combo.currentData()
         if model_id:
+            previous_model_id = self.controller.selected_model_id
+            warning = self.controller.model_compatibility_warning(str(model_id))
+            if warning:
+                answer = QMessageBox.question(
+                    self,
+                    "Cảnh báo VRAM",
+                    warning + "\n\nBạn vẫn muốn chọn model này?",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                )
+                if answer != QMessageBox.StandardButton.Yes:
+                    self.model_combo.blockSignals(True)
+                    self.model_combo.setCurrentIndex(max(0, self.model_combo.findData(previous_model_id)))
+                    self.model_combo.blockSignals(False)
+                    return
             self.controller.select_model(str(model_id))
             self.refresh_system_info()
 
@@ -977,11 +1053,16 @@ class MainWindow(QMainWindow):
     def _open_system_info_dialog(self) -> None:
         if self.controller.system_info_provider and SystemInfoDialog is not None:
             model_cache_dir = self.controller.settings_store.load().model_cache_dir if self.controller.settings_store else None
+            settings = self.controller.settings_store.load() if self.controller.settings_store else self.controller.settings
             dialog = SystemInfoDialog(
                 AboutController(self.controller.system_info_provider),
                 self,
                 selected_model_id=self.controller.selected_model_id,
                 model_cache_dir=model_cache_dir,
+                selected_gpu_id=settings.selected_gpu_id,
+                effective_profile_id=getattr(self.controller.job_runner, "execution_profile_id", None),
+                effective_compute_type=getattr(self.controller.job_runner, "compute_type", None),
+                effective_batch_size=getattr(self.controller.job_runner, "batch_size", None),
             )
             dialog.exec()
         else:
