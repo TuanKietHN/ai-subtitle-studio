@@ -39,6 +39,11 @@ The project follows Semantic Versioning. Release candidates use the
 
 - RC5 is unsigned and must remain a GitHub pre-release; Windows SmartScreen may
   warn until Authenticode signing is available.
+- Added a time-limited prerelease exception for `PYSEC-2026-3624` in transitive
+  `lightning==2.6.5`. WhisperX reaches the affected checkpoint loader through
+  mandatory Pyannote VAD, but RC5 only permits the pinned and release-hashed
+  bundled VAD checkpoint and exposes no user Lightning checkpoint selector;
+  stable remains blocked until a patched Lightning release is pinned.
 - Clean-Windows install/resume/upgrade/uninstall, real NVIDIA 4 GiB and real
   Google/DeepSeek acceptance remain required before publication claims are
   expanded.

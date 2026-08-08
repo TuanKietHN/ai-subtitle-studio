@@ -486,6 +486,15 @@ Last RC5 source/build validation run: 2026-08-08.
   identity `a7be9704f1d9798ae0dcb1d69675601613ef38fa036e512526a71f9eebf34656`;
   the manifest remains correctly blocked from publication by
   `git_commit=uncommitted`.
+- Dependency audit refresh on 2026-08-09 added the thirteenth explicit
+  prerelease exception for `PYSEC-2026-3624` affecting transitive
+  `lightning==2.6.5`. OSV describes attacker-controlled checkpoint execution
+  through `LightningModule.load_from_checkpoint`. Pyannote reaches that loader
+  indirectly, but RC5 fixes the input to the pinned, runtime-inventoried
+  `whisperx/assets/pytorch_model.bin`, exposes no user Lightning checkpoint
+  selector and disables diarization. No fixed Lightning PyPI release was
+  available, so stable remains blocked until the exception is removed in favor
+  of a patched pin.
 
 Previous full runtime validation run: 2026-07-30.
 

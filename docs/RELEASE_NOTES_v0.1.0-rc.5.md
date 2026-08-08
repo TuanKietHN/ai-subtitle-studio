@@ -71,6 +71,11 @@ file đã tải sẵn.
 - Cần kiểm thử no-GPU, SmartScreen và chữ ký số trước stable.
 - Một số dependency advisory do WhisperX/Torch upstream vẫn chặn stable theo
   policy hiện tại.
+- Dependency gián tiếp `lightning==2.6.5` có advisory
+  `PYSEC-2026-3624`. Pyannote VAD đi qua loader bị ảnh hưởng, nhưng RC5 chỉ nạp
+  checkpoint VAD cố định trong WhisperX đã được pin và hash, không cho chọn
+  checkpoint Lightning tùy ý; stable tiếp tục bị chặn cho đến khi pin được bản
+  Lightning đã vá.
 
 ## Asset bắt buộc của release
 
@@ -103,4 +108,3 @@ code” do GitHub tự tạo không chứa runtime cài sẵn.
 
 6. Ghi bằng chứng các gate thủ công vào `quickstart.md`.
 7. Chọn **Set as a pre-release**. Không chọn stable/latest cho RC5.
-

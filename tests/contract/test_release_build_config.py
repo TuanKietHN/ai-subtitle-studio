@@ -52,11 +52,33 @@ def test_vulnerability_exceptions_are_explicit_unique_and_time_limited():
     assert advisories
     assert len(ids) == len(set(ids))
     for item in advisories:
-        assert item["package"] in {"torch", "transformers"}
+        assert item["package"] in {"torch", "transformers", "lightning"}
         assert item["affected_version"]
         assert item["rationale"]
         expiry = date.fromisoformat(item["expires_on"])
         assert date(2026, 7, 30) < expiry <= date(2026, 12, 31)
+
+
+def test_lightning_checkpoint_rce_exception_is_scope_bounded():
+    policy = json.loads(
+        (ROOT / "packaging" / "vulnerability-allowlist.json").read_text(encoding="utf-8")
+    )
+    advisory = next(
+        item for item in policy["advisories"] if item["id"] == "PYSEC-2026-3624"
+    )
+    application_source = "\n".join(
+        path.read_text(encoding="utf-8") for path in (ROOT / "src").rglob("*.py")
+    )
+    frozen_smoke = (ROOT / "scripts" / "smoke-frozen.ps1").read_text(encoding="utf-8")
+
+    assert advisory["package"] == "lightning"
+    assert advisory["affected_version"] == "2.6.5"
+    assert "load_from_checkpoint" in advisory["rationale"]
+    assert "indirectly" in advisory["rationale"]
+    assert "whisperx/assets/pytorch_model.bin" in advisory["rationale"]
+    assert "prerelease-only" in advisory["rationale"]
+    assert "load_from_checkpoint" not in application_source
+    assert "whisperx/assets/pytorch_model.bin" in frozen_smoke
 
 
 def test_stable_installer_is_blocked_by_active_vulnerability_exceptions():
