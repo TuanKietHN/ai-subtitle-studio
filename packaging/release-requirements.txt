@@ -3,7 +3,7 @@
 PySide6==6.11.1
 whisperx==3.8.6
 torch==2.8.0
-torchvision==0.23.0
+torchvision==0.28.0
 torchaudio==2.8.0
 httpx==0.28.1
 keyring==25.7.0
